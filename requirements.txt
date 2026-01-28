@@ -1,6 +1,6 @@
-fastapi==0.109.0
-uvicorn[standard]==0.27.0
-kerykeion==4.15.2
-pytz==2024.1
-pydantic==2.5.3
-swisseph==2.10.3.2
+fastapi
+uvicorn[standard]
+kerykeion>=4.0.0
+pytz
+pydantic>=2.0.0
+swisseph
