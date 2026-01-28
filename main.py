@@ -96,110 +96,154 @@ def geocode_ciudad(ciudad: str, pais: str):
 def formatear_posiciones(subject: AstrologicalSubject):
     """
     Extrae y formatea posiciones planetarias
+    Compatible con Kerykeion v5+
     """
     planetas = {}
     
-    # Sol
-    planetas["sol"] = {
-        "grado": round(subject.sun.position, 2),
-        "signo": subject.sun.sign,
-        "casa": subject.sun.house,
-        "retrogrado": subject.sun.retrograde
-    }
+    # En Kerykeion v5+, los planetas están en subject.planets_list
+    # y cada uno tiene attributes: name, sign, position, house, retrograde
     
-    # Luna
-    planetas["luna"] = {
-        "grado": round(subject.moon.position, 2),
-        "signo": subject.moon.sign,
-        "casa": subject.moon.house,
-        "retrogrado": subject.moon.retrograde
-    }
-    
-    # Mercurio
-    planetas["mercurio"] = {
-        "grado": round(subject.mercury.position, 2),
-        "signo": subject.mercury.sign,
-        "casa": subject.mercury.house,
-        "retrogrado": subject.mercury.retrograde
-    }
-    
-    # Venus
-    planetas["venus"] = {
-        "grado": round(subject.venus.position, 2),
-        "signo": subject.venus.sign,
-        "casa": subject.venus.house,
-        "retrogrado": subject.venus.retrograde
-    }
-    
-    # Marte
-    planetas["marte"] = {
-        "grado": round(subject.mars.position, 2),
-        "signo": subject.mars.sign,
-        "casa": subject.mars.house,
-        "retrogrado": subject.mars.retrograde
-    }
-    
-    # Júpiter
-    planetas["jupiter"] = {
-        "grado": round(subject.jupiter.position, 2),
-        "signo": subject.jupiter.sign,
-        "casa": subject.jupiter.house,
-        "retrogrado": subject.jupiter.retrograde
-    }
-    
-    # Saturno
-    planetas["saturno"] = {
-        "grado": round(subject.saturn.position, 2),
-        "signo": subject.saturn.sign,
-        "casa": subject.saturn.house,
-        "retrogrado": subject.saturn.retrograde
-    }
-    
-    # Urano
-    planetas["urano"] = {
-        "grado": round(subject.uranus.position, 2),
-        "signo": subject.uranus.sign,
-        "casa": subject.uranus.house,
-        "retrogrado": subject.uranus.retrograde
-    }
-    
-    # Neptuno
-    planetas["neptuno"] = {
-        "grado": round(subject.neptune.position, 2),
-        "signo": subject.neptune.sign,
-        "casa": subject.neptune.house,
-        "retrogrado": subject.neptune.retrograde
-    }
-    
-    # Plutón
-    planetas["pluton"] = {
-        "grado": round(subject.pluto.position, 2),
-        "signo": subject.pluto.sign,
-        "casa": subject.pluto.house,
-        "retrogrado": subject.pluto.retrograde
-    }
-    
-    # Puntos especiales
-    puntos = {
-        "asc": {
-            "grado": round(subject.first_house.position, 2),
-            "signo": subject.first_house.sign
-        },
-        "mc": {
-            "grado": round(subject.tenth_house.position, 2),
-            "signo": subject.tenth_house.sign
-        },
-        "nodo_norte": {
-            "grado": round(subject.mean_node.position, 2),
-            "signo": subject.mean_node.sign,
-            "casa": subject.mean_node.house
+    try:
+        # Sol
+        sol = next((p for p in subject.planets_list if p['name'] == 'Sun'), None)
+        if sol:
+            planetas["sol"] = {
+                "grado": round(sol['position'], 2),
+                "signo": sol['sign'],
+                "casa": sol['house'],
+                "retrogrado": sol.get('retrograde', False)
+            }
+        
+        # Luna
+        luna = next((p for p in subject.planets_list if p['name'] == 'Moon'), None)
+        if luna:
+            planetas["luna"] = {
+                "grado": round(luna['position'], 2),
+                "signo": luna['sign'],
+                "casa": luna['house'],
+                "retrogrado": luna.get('retrograde', False)
+            }
+        
+        # Mercurio
+        mercurio = next((p for p in subject.planets_list if p['name'] == 'Mercury'), None)
+        if mercurio:
+            planetas["mercurio"] = {
+                "grado": round(mercurio['position'], 2),
+                "signo": mercurio['sign'],
+                "casa": mercurio['house'],
+                "retrogrado": mercurio.get('retrograde', False)
+            }
+        
+        # Venus
+        venus = next((p for p in subject.planets_list if p['name'] == 'Venus'), None)
+        if venus:
+            planetas["venus"] = {
+                "grado": round(venus['position'], 2),
+                "signo": venus['sign'],
+                "casa": venus['house'],
+                "retrogrado": venus.get('retrograde', False)
+            }
+        
+        # Marte
+        marte = next((p for p in subject.planets_list if p['name'] == 'Mars'), None)
+        if marte:
+            planetas["marte"] = {
+                "grado": round(marte['position'], 2),
+                "signo": marte['sign'],
+                "casa": marte['house'],
+                "retrogrado": marte.get('retrograde', False)
+            }
+        
+        # Júpiter
+        jupiter = next((p for p in subject.planets_list if p['name'] == 'Jupiter'), None)
+        if jupiter:
+            planetas["jupiter"] = {
+                "grado": round(jupiter['position'], 2),
+                "signo": jupiter['sign'],
+                "casa": jupiter['house'],
+                "retrogrado": jupiter.get('retrograde', False)
+            }
+        
+        # Saturno
+        saturno = next((p for p in subject.planets_list if p['name'] == 'Saturn'), None)
+        if saturno:
+            planetas["saturno"] = {
+                "grado": round(saturno['position'], 2),
+                "signo": saturno['sign'],
+                "casa": saturno['house'],
+                "retrogrado": saturno.get('retrograde', False)
+            }
+        
+        # Urano
+        urano = next((p for p in subject.planets_list if p['name'] == 'Uranus'), None)
+        if urano:
+            planetas["urano"] = {
+                "grado": round(urano['position'], 2),
+                "signo": urano['sign'],
+                "casa": urano['house'],
+                "retrogrado": urano.get('retrograde', False)
+            }
+        
+        # Neptuno
+        neptuno = next((p for p in subject.planets_list if p['name'] == 'Neptune'), None)
+        if neptuno:
+            planetas["neptuno"] = {
+                "grado": round(neptuno['position'], 2),
+                "signo": neptuno['sign'],
+                "casa": neptuno['house'],
+                "retrogrado": neptuno.get('retrograde', False)
+            }
+        
+        # Plutón
+        pluton = next((p for p in subject.planets_list if p['name'] == 'Pluto'), None)
+        if pluton:
+            planetas["pluton"] = {
+                "grado": round(pluton['position'], 2),
+                "signo": pluton['sign'],
+                "casa": pluton['house'],
+                "retrogrado": pluton.get('retrograde', False)
+            }
+        
+        # Puntos especiales (houses_list y nodes)
+        puntos = {}
+        
+        # ASC (First House)
+        if hasattr(subject, 'houses_list') and len(subject.houses_list) > 0:
+            asc = subject.houses_list[0]
+            puntos["asc"] = {
+                "grado": round(asc['position'], 2),
+                "signo": asc['sign']
+            }
+        
+        # MC (Tenth House)
+        if hasattr(subject, 'houses_list') and len(subject.houses_list) > 9:
+            mc = subject.houses_list[9]
+            puntos["mc"] = {
+                "grado": round(mc['position'], 2),
+                "signo": mc['sign']
+            }
+        
+        # Nodo Norte
+        nodo = next((p for p in subject.planets_list if p['name'] == 'Mean_Node'), None)
+        if nodo:
+            puntos["nodo_norte"] = {
+                "grado": round(nodo['position'], 2),
+                "signo": nodo['sign'],
+                "casa": nodo['house']
+            }
+        
+        return {
+            "planetas": planetas,
+            "puntos": puntos
         }
-    }
-    
-    return {
-        "planetas": planetas,
-        "puntos": puntos
-    }
+        
+    except Exception as e:
+        # Si falla, devolver estructura mínima con el error
+        return {
+            "planetas": {},
+            "puntos": {},
+            "error": f"Error al formatear posiciones: {str(e)}"
+        }
 
 
 # ENDPOINTS
