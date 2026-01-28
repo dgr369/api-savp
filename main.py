@@ -45,7 +45,8 @@ class TransitsRequest(BaseModel):
     lat_natal: Optional[float] = None
     lon_natal: Optional[float] = None
     timezone_natal: Optional[str] = "Europe/Madrid"
-    fecha_transito: Optional[str] = None
+    fecha_transito: Optional[str] = None  # YYYY-MM-DD
+    hora_transito: Optional[str] = None   # HH:MM (NUEVO)
 
 class SolarReturnRequest(BaseModel):
     nombre: str
@@ -217,16 +218,26 @@ def calcular_transitos(request: TransitsRequest):
         
         if request.fecha_transito:
             fecha_transito_dt = datetime.strptime(request.fecha_transito, "%Y-%m-%d")
+            # Si se proporciona hora_transito, usarla; sino 12:00
+            if request.hora_transito:
+                hora_parts = request.hora_transito.split(":")
+                hora_t = int(hora_parts[0])
+                minuto_t = int(hora_parts[1])
+            else:
+                hora_t = 12
+                minuto_t = 0
         else:
             fecha_transito_dt = datetime.now()
+            hora_t = fecha_transito_dt.hour
+            minuto_t = fecha_transito_dt.minute
         
         transitos = AstrologicalSubject(
             name="Tránsitos",
             year=fecha_transito_dt.year,
             month=fecha_transito_dt.month,
             day=fecha_transito_dt.day,
-            hour=12,
-            minute=0,
+            hour=hora_t,
+            minute=minuto_t,
             city=request.ciudad_natal,
             nation=request.pais_natal,
             lat=lat_natal,
