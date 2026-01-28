@@ -8,7 +8,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from datetime import datetime
-from kerykeion import AstrologicalSubject, Report
+from kerykeion import AstrologicalSubject
 from typing import Optional
 import pytz
 
