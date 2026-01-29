@@ -154,65 +154,62 @@ def get_planet_data(subject, planet_name):
     except:
         return None
 
-def calcular_casa_natal(grado_planeta, signo_planeta, houses_cusps):
+def calcular_casa_en_carta_natal(planeta_grado_abs, natal_subject):
     """
-    Calcula en qué casa natal cae un planeta de tránsito
+    Calcula en qué casa NATAL cae un planeta dado su grado absoluto
     
     Args:
-        grado_planeta: Grado absoluto del planeta (0-360)
-        signo_planeta: Signo del planeta
-        houses_cusps: Lista de cúspides de casas natales [(signo, grado), ...]
+        planeta_grado_abs: Grado absoluto del planeta (0-360)
+        natal_subject: AstrologicalSubject de la carta natal
     
     Returns:
-        Número de casa (1-12)
+        Número de casa natal (1-12)
     """
-    # Convertir signo a índice (0-11)
+    # Obtener cúspides de casas natales
+    try:
+        houses = []
+        for i in range(1, 13):
+            house_attr = f'house{i}'
+            if hasattr(natal_subject, house_attr):
+                house = getattr(natal_subject, house_attr)
+                if isinstance(house, dict):
+                    houses.append(house.get('position', 0))
+                else:
+                    houses.append(getattr(house, 'position', 0))
+            else:
+                houses.append((i-1) * 30)  # Fallback
+        
+        # Convertir grado absoluto del planeta
+        grado_norm = planeta_grado_abs % 360
+        
+        # Buscar en qué casa cae
+        for casa in range(12):
+            cusp_actual = houses[casa]
+            cusp_siguiente = houses[(casa + 1) % 12] if casa < 11 else houses[0]
+            
+            # Manejar cruce de 0°
+            if cusp_siguiente < cusp_actual:
+                # Casa cruza 0° Aries
+                if grado_norm >= cusp_actual or grado_norm < cusp_siguiente:
+                    return casa + 1
+            else:
+                # Casa normal
+                if cusp_actual <= grado_norm < cusp_siguiente:
+                    return casa + 1
+        
+        return 1  # Fallback
+    except:
+        return 1  # Fallback seguro
+
+def grado_absoluto_desde_signo(grado, signo):
+    """Convierte grado en signo a grado absoluto (0-360)"""
     signos_map = {
         'Ari': 0, 'Tau': 1, 'Gem': 2, 'Can': 3, 'Leo': 4, 'Vir': 5,
         'Lib': 6, 'Sco': 7, 'Sag': 8, 'Cap': 9, 'Aqu': 10, 'Pis': 11
     }
-    
-    # Calcular grado absoluto del planeta (0-360)
-    signo_idx = signos_map.get(signo_planeta[:3], 0)
-    grado_abs_planeta = signo_idx * 30 + grado_planeta
-    
-    # Normalizar a 0-360
-    grado_abs_planeta = grado_abs_planeta % 360
-    
-    # Calcular grados absolutos de todas las cúspides
-    cuspides_abs = []
-    for i in range(12):
-        if hasattr(houses_cusps, f'house{i+1}'):
-            cusp = getattr(houses_cusps, f'house{i+1}')
-            if isinstance(cusp, dict):
-                signo = cusp.get('sign', 'Ari')[:3]
-                grado = cusp.get('position', 0)
-            else:
-                signo = getattr(cusp, 'sign', 'Ari')[:3]
-                grado = getattr(cusp, 'position', 0)
-            
-            signo_idx = signos_map.get(signo, 0)
-            grado_abs = signo_idx * 30 + grado
-            cuspides_abs.append(grado_abs % 360)
-        else:
-            cuspides_abs.append(i * 30)  # Fallback: casas iguales
-    
-    # Encontrar en qué casa cae el planeta
-    for casa in range(12):
-        cusp_actual = cuspides_abs[casa]
-        cusp_siguiente = cuspides_abs[(casa + 1) % 12]
-        
-        # Manejar el caso de cruce del 0° (Aries)
-        if cusp_siguiente < cusp_actual:
-            # La casa cruza 0°
-            if grado_abs_planeta >= cusp_actual or grado_abs_planeta < cusp_siguiente:
-                return casa + 1
-        else:
-            # Casa normal
-            if cusp_actual <= grado_abs_planeta < cusp_siguiente:
-                return casa + 1
-    
-    return 1  # Fallback
+    signo_corto = signo[:3] if len(signo) > 3 else signo
+    signo_idx = signos_map.get(signo_corto, 0)
+    return (signo_idx * 30 + grado) % 360
 
 def formatear_posiciones(subject: AstrologicalSubject, reference_subject: Optional[AstrologicalSubject] = None):
     """
@@ -242,13 +239,10 @@ def formatear_posiciones(subject: AstrologicalSubject, reference_subject: Option
     for esp, eng in planet_map.items():
         data = get_planet_data(subject, eng)
         if data:
-            # Si usamos casas de referencia, recalcular la casa
+            # Si usamos casas de referencia (casas natales), recalcular
             if reference_subject:
-                casa_natal = calcular_casa_natal(
-                    data['grado'], 
-                    data['signo'], 
-                    reference_subject
-                )
+                grado_abs = grado_absoluto_desde_signo(data['grado'], data['signo'])
+                casa_natal = calcular_casa_en_carta_natal(grado_abs, reference_subject)
                 data['casa'] = casa_natal
             
             planetas[esp] = data
