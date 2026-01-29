@@ -145,13 +145,19 @@ def get_planet_data(subject, planet_name):
             }
         # O objeto con atributos
         else:
+            # Para nodos y algunos puntos, puede no tener 'house'
+            casa = getattr(planet, 'house', None)
+            if casa is None:
+                casa = 1  # Default para puntos sin casa
+            
             return {
                 "grado": round(getattr(planet, 'position', 0), 2),
                 "signo": getattr(planet, 'sign', ''),
-                "casa": getattr(planet, 'house', 1),
+                "casa": casa,
                 "retrogrado": getattr(planet, 'retrograde', False)
             }
-    except:
+    except Exception as e:
+        print(f"ERROR get_planet_data({planet_name}): {e}")
         return None
 
 def calcular_casa_en_carta_natal(planeta_grado_abs, natal_subject):
@@ -484,22 +490,108 @@ def calcular_transitos(request: TransitsRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
 
+def calcular_momento_retorno_solar(fecha_natal_dt, hora_natal, año_revolucion, lat, lon, timezone):
+    """
+    Calcula el momento exacto cuando el Sol vuelve a su posición natal
+    
+    Returns:
+        tuple: (año, mes, dia, hora, minuto) del retorno exacto
+    """
+    from datetime import timedelta
+    
+    # Obtener posición natal del Sol
+    hora_parts = hora_natal.split(":")
+    natal_subject = AstrologicalSubject(
+        name="Natal",
+        year=fecha_natal_dt.year,
+        month=fecha_natal_dt.month,
+        day=fecha_natal_dt.day,
+        hour=int(hora_parts[0]),
+        minute=int(hora_parts[1]),
+        lat=lat,
+        lng=lon,
+        tz_str=timezone,
+        city="",
+        nation=""
+    )
+    
+    sol_natal_pos = get_planet_data(natal_subject, 'sun')
+    if not sol_natal_pos:
+        # Fallback: usar fecha natal
+        return año_revolucion, fecha_natal_dt.month, fecha_natal_dt.day, int(hora_parts[0]), int(hora_parts[1])
+    
+    # Convertir a grado absoluto
+    sol_natal_abs = grado_absoluto_desde_signo(sol_natal_pos['grado'], sol_natal_pos['signo'])
+    
+    # Buscar en ventana de +/- 2 días alrededor de la fecha natal
+    fecha_base = datetime(año_revolucion, fecha_natal_dt.month, fecha_natal_dt.day)
+    mejor_match = None
+    menor_diff = 360
+    
+    for offset_dias in range(-2, 3):  # -2, -1, 0, 1, 2 días
+        for offset_horas in range(0, 24, 2):  # Cada 2 horas
+            fecha_test = fecha_base + timedelta(days=offset_dias, hours=offset_horas)
+            
+            try:
+                test_subject = AstrologicalSubject(
+                    name="Test",
+                    year=fecha_test.year,
+                    month=fecha_test.month,
+                    day=fecha_test.day,
+                    hour=fecha_test.hour,
+                    minute=0,
+                    lat=lat,
+                    lng=lon,
+                    tz_str=timezone,
+                    city="",
+                    nation=""
+                )
+                
+                sol_test = get_planet_data(test_subject, 'sun')
+                if sol_test:
+                    sol_test_abs = grado_absoluto_desde_signo(sol_test['grado'], sol_test['signo'])
+                    diff = abs(sol_test_abs - sol_natal_abs)
+                    # Considerar cruce de 0°
+                    if diff > 180:
+                        diff = 360 - diff
+                    
+                    if diff < menor_diff:
+                        menor_diff = diff
+                        mejor_match = fecha_test
+            except:
+                continue
+    
+    if mejor_match:
+        return mejor_match.year, mejor_match.month, mejor_match.day, mejor_match.hour, mejor_match.minute
+    else:
+        # Fallback
+        return año_revolucion, fecha_natal_dt.month, fecha_natal_dt.day, int(hora_parts[0]), int(hora_parts[1])
+
 @app.post("/solar_return")
 def calcular_revolucion_solar(request: SolarReturnRequest):
     try:
         lat, lon = (request.lat_natal, request.lon_natal) if request.lat_natal and request.lon_natal else geocode_ciudad(request.ciudad_natal, request.pais_natal)
         
         fecha_natal_dt = datetime.strptime(request.fecha_natal, "%Y-%m-%d")
-        hora_natal_parts = request.hora_natal.split(":")
         
-        # Calcular revolución solar
+        # Calcular momento exacto del retorno solar
+        año_ret, mes_ret, dia_ret, hora_ret, min_ret = calcular_momento_retorno_solar(
+            fecha_natal_dt,
+            request.hora_natal,
+            request.año_revolucion,
+            lat,
+            lon,
+            request.timezone_natal
+        )
+        
+        # Crear carta con el momento exacto del retorno
         revolucion = AstrologicalSubject(
             name=f"{request.nombre} - RS {request.año_revolucion}",
-            year=request.año_revolucion,
-            month=fecha_natal_dt.month,
-            day=fecha_natal_dt.day,
-            hour=int(hora_natal_parts[0]),
-            minute=int(hora_natal_parts[1]),
+            year=año_ret,
+            month=mes_ret,
+            day=dia_ret,
+            hour=hora_ret,
+            minute=min_ret,
             city=request.ciudad_natal,
             nation=request.pais_natal,
             lat=lat,
@@ -508,9 +600,8 @@ def calcular_revolucion_solar(request: SolarReturnRequest):
             houses_system_identifier=request.house_system
         )
         
-        # Obtener fecha/hora del retorno
-        fecha_revolucion = f"{revolucion.year}-{revolucion.month:02d}-{revolucion.day:02d}"
-        hora_revolucion = f"{revolucion.hour:02d}:{revolucion.minute:02d}"
+        fecha_revolucion = f"{año_ret}-{mes_ret:02d}-{dia_ret:02d}"
+        hora_revolucion = f"{hora_ret:02d}:{min_ret:02d}"
         
         return {
             "success": True,
