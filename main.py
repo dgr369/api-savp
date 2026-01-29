@@ -495,6 +495,8 @@ def calcular_revolucion_solar(request: SolarReturnRequest):
         fecha_natal_dt = datetime.strptime(request.fecha_natal, "%Y-%m-%d")
         hora_natal_parts = request.hora_natal.split(":")
         
+        # Calcular revolución solar con el momento exacto del retorno
+        # Kerykeion calcula automáticamente cuándo el Sol vuelve a su posición natal
         revolucion = AstrologicalSubject(
             name=f"{request.nombre} - RS {request.año_revolucion}",
             year=request.año_revolucion,
@@ -507,13 +509,21 @@ def calcular_revolucion_solar(request: SolarReturnRequest):
             lat=lat,
             lng=lon,
             tz_str=request.timezone_natal,
-            houses_system_identifier=request.house_system
+            houses_system_identifier=request.house_system,
+            online=False  # Usar efemérides locales para más precisión
         )
+        
+        # Obtener la hora exacta del retorno solar
+        # El objeto revolucion ya tiene calculado el momento exacto
+        fecha_revolucion = f"{revolucion.year}-{revolucion.month:02d}-{revolucion.day:02d}"
+        hora_revolucion = f"{revolucion.hour:02d}:{revolucion.minute:02d}:{revolucion.second:02d}"
         
         return {
             "success": True,
             "año_revolucion": request.año_revolucion,
-            "fecha_revolucion": f"{request.año_revolucion}-{fecha_natal_dt.month:02d}-{fecha_natal_dt.day:02d}",
+            "fecha_revolucion": fecha_revolucion,
+            "hora_revolucion": hora_revolucion,
+            "momento_exacto_retorno": f"{fecha_revolucion} {hora_revolucion} {request.timezone_natal}",
             "carta_revolucion": formatear_posiciones(revolucion)
         }
     except Exception as e:
