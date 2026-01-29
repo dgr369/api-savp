@@ -135,12 +135,25 @@ def get_planet_data(subject, planet_name):
         if planet is None:
             return None
         
+        # Mapeo de nombres de casas a números
+        house_name_to_num = {
+            'First_House': 1, 'Second_House': 2, 'Third_House': 3,
+            'Fourth_House': 4, 'Fifth_House': 5, 'Sixth_House': 6,
+            'Seventh_House': 7, 'Eighth_House': 8, 'Ninth_House': 9,
+            'Tenth_House': 10, 'Eleventh_House': 11, 'Twelfth_House': 12
+        }
+        
         # Kerykeion devuelve dict
         if isinstance(planet, dict):
+            casa = planet.get('house', 1)
+            # Si casa es string, convertir a número
+            if isinstance(casa, str):
+                casa = house_name_to_num.get(casa, 1)
+            
             return {
                 "grado": round(planet.get('position', 0), 2),
                 "signo": planet.get('sign', ''),
-                "casa": planet.get('house', 1),
+                "casa": casa,
                 "retrogrado": planet.get('retrograde', False)
             }
         # O objeto con atributos
@@ -148,7 +161,10 @@ def get_planet_data(subject, planet_name):
             # Para nodos y algunos puntos, puede no tener 'house'
             casa = getattr(planet, 'house', None)
             if casa is None:
-                casa = 1  # Default para puntos sin casa
+                casa = 1
+            elif isinstance(casa, str):
+                # Convertir nombre de casa a número
+                casa = house_name_to_num.get(casa, 1)
             
             return {
                 "grado": round(getattr(planet, 'position', 0), 2),
@@ -307,8 +323,8 @@ def formatear_posiciones(subject: AstrologicalSubject, reference_subject: Option
         "urano": "uranus",
         "neptuno": "neptune",
         "pluton": "pluto",
-        "nodo_norte": "mean_node",
-        "nodo_sur": "mean_south_node"
+        "nodo_norte": "true_node",  # Kerykeion 5.x solo tiene true_node
+        "nodo_sur": "true_south_node"
     }
     
     for esp, eng in planet_map.items():
