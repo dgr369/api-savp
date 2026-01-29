@@ -296,10 +296,7 @@ def get_mean_node(subject):
     Kerykeion 5.x no provee mean_node, así que lo calculamos manualmente
     """
     try:
-        # Usar pyswisseph que Kerykeion incluye como dependencia
-        from kerykeion.settings import get_settings
-        settings = get_settings()
-        swe = settings.swe
+        import pyswisseph as swe
         
         # Configurar fecha juliana (UTC)
         year = subject.year
@@ -307,39 +304,38 @@ def get_mean_node(subject):
         day = subject.day
         hour = subject.hour + (subject.minute / 60.0)
         
-        # Convertir a fecha juliana (usando UTC)
+        # Convertir a fecha juliana
         jd = swe.julday(year, month, day, hour)
         
         # Calcular Nodo Norte Medio
-        # 10 = SE_MEAN_NODE en pyswisseph
-        # calc_ut retorna tupla: (longitude, latitude, distance, speed_long, speed_lat, speed_dist)
-        result = swe.calc_ut(jd, 10)
+        # SE_MEAN_NODE = 10
+        result = swe.calc_ut(jd, swe.MEAN_NODE)
         
-        if result and len(result) >= 2:
-            longitude = result[0]  # Longitud eclíptica 0-360
-            
-            # Convertir a signo + grado
-            signos = ['Ari', 'Tau', 'Gem', 'Can', 'Leo', 'Vir', 
-                     'Lib', 'Sco', 'Sag', 'Cap', 'Aqu', 'Pis']
-            sign_num = int(longitude / 30)
-            degree = longitude % 30
-            
-            print(f"DEBUG mean_node: longitude={longitude:.2f}, sign={signos[sign_num]}, degree={degree:.2f}")
-            
-            return {
-                "grado": round(degree, 2),
-                "signo": signos[sign_num],
-                "casa": 1,  # Se calculará después si es necesario
-                "retrogrado": True  # Los nodos siempre son retrógrados
-            }
+        longitude = result[0]  # Longitud eclíptica 0-360
+        
+        # Convertir a signo + grado
+        signos = ['Ari', 'Tau', 'Gem', 'Can', 'Leo', 'Vir', 
+                 'Lib', 'Sco', 'Sag', 'Cap', 'Aqu', 'Pis']
+        sign_num = int(longitude / 30)
+        degree = longitude % 30
+        
+        print(f"DEBUG mean_node: longitude={longitude:.2f}°, {signos[sign_num]} {degree:.2f}°")
+        
+        return {
+            "grado": round(degree, 2),
+            "signo": signos[sign_num],
+            "casa": 1,  # Se calculará después
+            "retrogrado": True
+        }
+        
     except Exception as e:
         print(f"ERROR calculando mean_node: {e}")
         import traceback
         traceback.print_exc()
-    
-    # Fallback: usar true_node si mean_node falla
-    print("FALLBACK: usando true_node en lugar de mean_node")
-    return get_planet_data(subject, 'true_node')
+        
+        # Fallback: usar true_node
+        print("FALLBACK: usando true_node")
+        return get_planet_data(subject, 'true_node')
 
 def formatear_posiciones(subject: AstrologicalSubject, reference_subject: Optional[AstrologicalSubject] = None):
     """
@@ -476,6 +472,14 @@ def test_nodos():
             result["true_node_value"] = str(nodo)
             result["true_node_data"] = get_planet_data(subject, 'true_node')
         
+        # NUEVO: Probar get_mean_node directamente
+        print("=" * 50)
+        print("PROBANDO get_mean_node()...")
+        mean_node_calc = get_mean_node(subject)
+        result["mean_node_calculated"] = mean_node_calc
+        print(f"Resultado: {mean_node_calc}")
+        print("=" * 50)
+        
         # También probar formatear_posiciones
         posiciones = formatear_posiciones(subject)
         result["planetas_keys"] = list(posiciones.get("planetas", {}).keys())
@@ -485,10 +489,17 @@ def test_nodos():
         if "nodo_norte" in posiciones.get("planetas", {}):
             result["nodo_norte_value"] = posiciones["planetas"]["nodo_norte"]
         
+        if "nodo_sur" in posiciones.get("planetas", {}):
+            result["nodo_sur_value"] = posiciones["planetas"]["nodo_sur"]
+        
         return result
         
     except Exception as e:
-        return {"error": str(e)}
+        import traceback
+        return {
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }
 
 @app.get("/")
 def root():
