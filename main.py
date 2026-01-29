@@ -300,7 +300,9 @@ def formatear_posiciones(subject: AstrologicalSubject, reference_subject: Option
         "saturno": "saturn",
         "urano": "uranus",
         "neptuno": "neptune",
-        "pluton": "pluto"
+        "pluton": "pluto",
+        "nodo_norte": "mean_node",
+        "nodo_sur": "mean_south_node"
     }
     
     for esp, eng in planet_map.items():
@@ -333,11 +335,6 @@ def formatear_posiciones(subject: AstrologicalSubject, reference_subject: Option
             "grado": mc_data["grado"],
             "signo": mc_data["signo"]
         }
-    
-    # Nodo Norte
-    nodo_data = get_planet_data(subject, 'mean_node')
-    if nodo_data:
-        puntos["nodo_norte"] = nodo_data
     
     return {"planetas": planetas, "puntos": puntos}
 
@@ -495,8 +492,7 @@ def calcular_revolucion_solar(request: SolarReturnRequest):
         fecha_natal_dt = datetime.strptime(request.fecha_natal, "%Y-%m-%d")
         hora_natal_parts = request.hora_natal.split(":")
         
-        # Calcular revolución solar con el momento exacto del retorno
-        # Kerykeion calcula automáticamente cuándo el Sol vuelve a su posición natal
+        # Calcular revolución solar
         revolucion = AstrologicalSubject(
             name=f"{request.nombre} - RS {request.año_revolucion}",
             year=request.año_revolucion,
@@ -509,14 +505,12 @@ def calcular_revolucion_solar(request: SolarReturnRequest):
             lat=lat,
             lng=lon,
             tz_str=request.timezone_natal,
-            houses_system_identifier=request.house_system,
-            online=False  # Usar efemérides locales para más precisión
+            houses_system_identifier=request.house_system
         )
         
-        # Obtener la hora exacta del retorno solar
-        # El objeto revolucion ya tiene calculado el momento exacto
+        # Obtener fecha/hora del retorno
         fecha_revolucion = f"{revolucion.year}-{revolucion.month:02d}-{revolucion.day:02d}"
-        hora_revolucion = f"{revolucion.hour:02d}:{revolucion.minute:02d}:{revolucion.second:02d}"
+        hora_revolucion = f"{revolucion.hour:02d}:{revolucion.minute:02d}"
         
         return {
             "success": True,
