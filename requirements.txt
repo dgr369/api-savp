@@ -3,5 +3,4 @@ uvicorn[standard]==0.27.0
 kerykeion>=5.7.0
 pytz==2024.1
 pydantic==2.5.3
-swisseph==2.10.3.2
 geopy==2.4.1
