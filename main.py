@@ -290,6 +290,49 @@ def grado_absoluto_desde_signo(grado, signo):
     signo_idx = signos_map.get(signo_corto, 0)
     return (signo_idx * 30 + grado) % 360
 
+def get_mean_node(subject):
+    """
+    Calcula el Nodo Norte Medio usando Swiss Ephemeris directamente
+    Kerykeion 5.x no provee mean_node, así que lo calculamos manualmente
+    """
+    try:
+        import swisseph as swe
+        from datetime import datetime
+        
+        # Configurar fecha juliana
+        year = subject.year
+        month = subject.month
+        day = subject.day
+        hour = subject.hour + (subject.minute / 60.0)
+        
+        # Convertir a fecha juliana
+        jd = swe.julday(year, month, day, hour)
+        
+        # Calcular Nodo Norte Medio (SE_MEAN_NODE = 10)
+        # swe.calc_ut retorna: (longitude, latitude, distance, speed_long, speed_lat, speed_dist)
+        result = swe.calc_ut(jd, swe.MEAN_NODE)
+        
+        if result and len(result) > 0:
+            longitude = result[0][0]  # Longitud eclíptica (0-360)
+            
+            # Convertir a signo + grado
+            signos = ['Ari', 'Tau', 'Gem', 'Can', 'Leo', 'Vir', 
+                     'Lib', 'Sco', 'Sag', 'Cap', 'Aqu', 'Pis']
+            sign_num = int(longitude / 30)
+            degree = longitude % 30
+            
+            return {
+                "grado": round(degree, 2),
+                "signo": signos[sign_num],
+                "casa": 1,  # Se calculará después si es necesario
+                "retrogrado": True  # Los nodos siempre son retrógrados
+            }
+    except Exception as e:
+        print(f"ERROR calculando mean_node: {e}")
+    
+    # Fallback: usar true_node si mean_node falla
+    return get_planet_data(subject, 'true_node')
+
 def formatear_posiciones(subject: AstrologicalSubject, reference_subject: Optional[AstrologicalSubject] = None):
     """
     Extrae posiciones planetarias - Compatible con Kerykeion 5.x
@@ -322,9 +365,7 @@ def formatear_posiciones(subject: AstrologicalSubject, reference_subject: Option
         "saturno": "saturn",
         "urano": "uranus",
         "neptuno": "neptune",
-        "pluton": "pluto",
-        "nodo_norte": "true_node",  # Kerykeion 5.x solo tiene true_node
-        "nodo_sur": "true_south_node"
+        "pluton": "pluto"
     }
     
     for esp, eng in planet_map.items():
@@ -338,6 +379,36 @@ def formatear_posiciones(subject: AstrologicalSubject, reference_subject: Option
                 data['casa'] = casa_natal
             
             planetas[esp] = data
+    
+    # Nodos lunares - Usar MEDIO (mean_node) calculado manualmente
+    nodo_norte_data = get_mean_node(subject)
+    if nodo_norte_data:
+        if reference_subject:
+            grado_abs = grado_absoluto_desde_signo(nodo_norte_data['grado'], nodo_norte_data['signo'])
+            casa_natal = calcular_casa_en_carta_natal(grado_abs, reference_subject)
+            nodo_norte_data['casa'] = casa_natal
+        planetas["nodo_norte"] = nodo_norte_data
+        
+        # Nodo Sur (opuesto al Norte)
+        nodo_sur_grado = nodo_norte_data['grado']
+        nodo_sur_signo_idx = (['Ari', 'Tau', 'Gem', 'Can', 'Leo', 'Vir', 
+                               'Lib', 'Sco', 'Sag', 'Cap', 'Aqu', 'Pis'].index(nodo_norte_data['signo']) + 6) % 12
+        nodo_sur_signo = ['Ari', 'Tau', 'Gem', 'Can', 'Leo', 'Vir', 
+                         'Lib', 'Sco', 'Sag', 'Cap', 'Aqu', 'Pis'][nodo_sur_signo_idx]
+        
+        nodo_sur_data = {
+            "grado": nodo_sur_grado,
+            "signo": nodo_sur_signo,
+            "casa": 1,
+            "retrogrado": True
+        }
+        
+        if reference_subject:
+            grado_abs = grado_absoluto_desde_signo(nodo_sur_data['grado'], nodo_sur_data['signo'])
+            casa_natal = calcular_casa_en_carta_natal(grado_abs, reference_subject)
+            nodo_sur_data['casa'] = casa_natal
+        
+        planetas["nodo_sur"] = nodo_sur_data
     
     # Puntos especiales
     puntos = {}
