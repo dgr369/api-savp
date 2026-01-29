@@ -166,17 +166,38 @@ def calcular_casa_en_carta_natal(planeta_grado_abs, natal_subject):
         Número de casa natal (1-12)
     """
     try:
-        # Kerykeion 5.x usa houses_list
-        if not hasattr(natal_subject, 'houses_list'):
-            print("ERROR: natal_subject no tiene houses_list")
+        # DEBUG: Listar TODOS los atributos disponibles
+        print(f"DEBUG TODOS los atributos de natal_subject:")
+        all_attrs = [attr for attr in dir(natal_subject) if not attr.startswith('_')]
+        print(f"DEBUG Atributos: {all_attrs[:50]}")  # Primeros 50
+        
+        # Buscar atributos relacionados con casas
+        house_attrs = [attr for attr in all_attrs if 'house' in attr.lower()]
+        print(f"DEBUG Atributos con 'house': {house_attrs}")
+        
+        # Intentar diferentes estructuras
+        if hasattr(natal_subject, 'houses_list'):
+            houses_data = natal_subject.houses_list
+            print(f"DEBUG Usando houses_list: {type(houses_data)}")
+        elif hasattr(natal_subject, 'houses'):
+            houses_data = natal_subject.houses
+            print(f"DEBUG Usando houses: {type(houses_data)}")
+        elif hasattr(natal_subject, 'first_house'):
+            # Tal vez tiene first_house, second_house, etc.
+            print("DEBUG Usando first_house, second_house...")
+            houses_data = []
+            for i in range(1, 13):
+                house_name = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth',
+                             'seventh', 'eighth', 'ninth', 'tenth', 'eleventh', 'twelfth'][i-1] + '_house'
+                if hasattr(natal_subject, house_name):
+                    houses_data.append(getattr(natal_subject, house_name))
+            print(f"DEBUG houses_data length: {len(houses_data)}")
+        else:
+            print("ERROR: No se encontró estructura de casas")
             return 1
         
-        houses_list = natal_subject.houses_list
-        print(f"DEBUG houses_list type: {type(houses_list)}")
-        print(f"DEBUG houses_list length: {len(houses_list) if houses_list else 0}")
-        
-        if not houses_list or len(houses_list) < 12:
-            print("ERROR: houses_list vacía o incompleta")
+        if not houses_data:
+            print("ERROR: houses_data vacía")
             return 1
         
         # Mapeo de signos a índice
@@ -188,7 +209,7 @@ def calcular_casa_en_carta_natal(planeta_grado_abs, natal_subject):
         houses_abs = []
         
         # Convertir cada casa a grado absoluto
-        for i, house in enumerate(houses_list, 1):
+        for i, house in enumerate(houses_data, 1):
             print(f"DEBUG Casa {i}: type={type(house)}, value={house}")
             
             # Obtener position y sign
@@ -220,12 +241,12 @@ def calcular_casa_en_carta_natal(planeta_grado_abs, natal_subject):
             if cusp_siguiente < cusp_actual:
                 # Casa cruza 0° Aries
                 if grado_norm >= cusp_actual or grado_norm < cusp_siguiente:
-                    print(f"DEBUG → Casa {casa+1} (cruce 0°): {cusp_actual:.2f}° <= {grado_norm:.2f}° o < {cusp_siguiente:.2f}°")
+                    print(f"DEBUG → Casa {casa+1} (cruce 0°)")
                     return casa + 1
             else:
                 # Casa normal
                 if cusp_actual <= grado_norm < cusp_siguiente:
-                    print(f"DEBUG → Casa {casa+1} (normal): {cusp_actual:.2f}° <= {grado_norm:.2f}° < {cusp_siguiente:.2f}°")
+                    print(f"DEBUG → Casa {casa+1} (normal)")
                     return casa + 1
         
         print("DEBUG → Fallback Casa 1")
