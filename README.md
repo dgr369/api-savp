@@ -1,118 +1,60 @@
-# API ASTROLÓGICA SAVP v3.5
+# API Astrológica SAVP v3.5
 
-API REST para cálculos astrológicos usando Kerykeion (Swiss Ephemeris).
+API REST para cálculos astrológicos del **Sistema Árbol de la Vida Personal (SAVP v3.5)** con Cábala Hermética y Astrología Cabalística.
 
-Soporta:
-- ✅ Carta Natal completa
-- ✅ Tránsitos actuales
-- ✅ Revolución Solar
+🔗 **URL**: https://api-savp.onrender.com  
+📚 **Documentación**: https://api-savp.onrender.com/docs
 
 ---
 
-## INSTALACIÓN LOCAL
+## 🌟 Características
 
-### 1. Instalar dependencias
-
-```bash
-pip install -r requirements.txt
-```
-
-### 2. Ejecutar servidor
-
-```bash
-uvicorn main:app --reload
-```
-
-Servidor corriendo en: `http://localhost:8000`
-
-Documentación Swagger: `http://localhost:8000/docs`
+✅ **Carta Natal** completa con Placidus/Whole Sign  
+✅ **Tránsitos** en casas natales (SAVP v3.5)  
+✅ **Revolución Solar** con cálculo del momento exacto del retorno  
+✅ **Nodos Lunares** (Norte y Sur)  
+✅ **Geocoding automático** (cualquier ciudad del mundo vía OpenStreetMap)  
+✅ **Compatible** con Kerykeion 5.7.0  
 
 ---
 
-## DEPLOY EN RENDER (GRATIS)
+## 📡 Endpoints
 
-### 1. Crear cuenta en Render
-
-- Ir a https://render.com
-- Registrarse (gratis)
-
-### 2. Crear nuevo Web Service
-
-- Dashboard → "New" → "Web Service"
-- Conectar con GitHub o subir repositorio
-
-### 3. Configuración
-
-**Build Command:**
-```
-pip install -r requirements.txt
+### 1. Carta Natal
+```http
+POST /natal
 ```
 
-**Start Command:**
-```
-uvicorn main:app --host 0.0.0.0 --port $PORT
-```
-
-**Environment:**
-- Python 3.11+
-
-### 4. Deploy
-
-- Click "Create Web Service"
-- Esperar 2-3 minutos
-- Obtendrás una URL: `https://tu-api.onrender.com`
-
----
-
-## USO DE LA API
-
-### ENDPOINT 1: Carta Natal
-
-**POST** `/natal`
-
-**Body (JSON):**
+**Request**:
 ```json
 {
-  "nombre": "Frater D.",
+  "nombre": "Ejemplo",
   "fecha": "1977-02-08",
   "hora": "22:40",
-  "ciudad": "Zaragoza",
+  "ciudad": "Fuentes de Ebro",
   "pais": "España",
-  "timezone": "Europe/Madrid"
+  "timezone": "Europe/Madrid",
+  "house_system": "P"
 }
 ```
 
-**Respuesta:**
+**Response**:
 ```json
 {
   "success": true,
   "datos": {
-    "nombre": "Frater D.",
-    "fecha": "1977-02-08",
-    "hora": "22:40",
-    "ciudad": "Zaragoza",
-    "coordenadas": {"lat": 41.6488, "lon": -0.8891}
+    "nombre": "Ejemplo",
+    "coordenadas": {"lat": 41.5167, "lon": -0.6333}
   },
   "carta": {
     "planetas": {
-      "sol": {
-        "grado": 20.01,
-        "signo": "Acuario",
-        "casa": 5,
-        "retrogrado": false
-      },
-      "luna": {
-        "grado": 20.24,
-        "signo": "Libra",
-        "casa": 1,
-        "retrogrado": false
-      }
-      // ... resto de planetas
+      "sol": {"grado": 20.13, "signo": "Aqu", "casa": 5, "retrogrado": false},
+      "nodo_norte": {"grado": 23.1, "signo": "Lib", "casa": 4, "retrogrado": true},
+      ...
     },
     "puntos": {
-      "asc": {"grado": 10.12, "signo": "Libra"},
-      "mc": {"grado": 11.57, "signo": "Cáncer"},
-      "nodo_norte": {"grado": 27.49, "signo": "Libra", "casa": 1}
+      "asc": {"grado": 10.42, "signo": "Lib"},
+      "mc": {"grado": 12.18, "signo": "Can"}
     }
   }
 }
@@ -120,214 +62,233 @@ uvicorn main:app --host 0.0.0.0 --port $PORT
 
 ---
 
-### ENDPOINT 2: Tránsitos
+### 2. Tránsitos
+```http
+POST /transits
+```
 
-**POST** `/transits`
-
-**Body (JSON):**
+**Request**:
 ```json
 {
-  "nombre": "Frater D.",
+  "nombre": "Ejemplo",
   "fecha_natal": "1977-02-08",
   "hora_natal": "22:40",
-  "ciudad_natal": "Zaragoza",
+  "ciudad_natal": "Fuentes de Ebro",
   "pais_natal": "España",
-  "timezone_natal": "Europe/Madrid",
-  "fecha_transito": "2026-01-28"
+  "fecha_transito": "2026-01-29",
+  "hora_transito": "09:17",
+  "use_natal_houses": true
 }
 ```
 
-**Respuesta:**
-```json
-{
-  "success": true,
-  "fecha_transito": "2026-01-28",
-  "natal": {
-    // Posiciones natales
-  },
-  "transitos": {
-    // Posiciones planetarias actuales
-  }
-}
-```
+**Parámetros importantes**:
+- `use_natal_houses: true` → Planetas de tránsito en **casas natales** (SAVP v3.5)
+- `use_natal_houses: false` → Planetas de tránsito en casas del momento
+
+**Response**: Similar a `/natal` pero con dos cartas: `natal` y `transitos`
 
 ---
 
-### ENDPOINT 3: Revolución Solar
+### 3. Revolución Solar
+```http
+POST /solar_return
+```
 
-**POST** `/solar_return`
-
-**Body (JSON):**
+**Request**:
 ```json
 {
-  "nombre": "Frater D.",
-  "fecha_natal": "1977-02-08",
-  "hora_natal": "22:40",
+  "nombre": "Ejemplo",
+  "fecha_natal": "1990-12-10",
+  "hora_natal": "02:25",
   "ciudad_natal": "Zaragoza",
   "pais_natal": "España",
-  "timezone_natal": "Europe/Madrid",
   "año_revolucion": 2026
 }
 ```
 
-**Respuesta:**
+**Response**:
 ```json
 {
   "success": true,
   "año_revolucion": 2026,
-  "fecha_revolucion": "2026-02-08",
-  "carta_revolucion": {
-    // Posiciones para la revolución solar 2026
-  }
+  "fecha_revolucion": "2026-12-09",
+  "hora_revolucion": "20:02",
+  "momento_exacto_retorno": "2026-12-09 20:02 Europe/Madrid",
+  "carta_revolucion": {...}
 }
+```
+
+⚡ **Nota**: La API calcula el **momento aproximado** (±2 horas) cuando el Sol vuelve a su posición natal.
+
+---
+
+### 4. Geocoding (Test)
+```http
+GET /geocode?ciudad=Zaragoza&pais=España
+```
+
+Verifica coordenadas antes de calcular.
+
+---
+
+### 5. Test Nodos (Debug)
+```http
+GET /test_nodos
+```
+
+Verifica que los nodos lunares funcionan correctamente.
+
+---
+
+## 🛠️ Instalación Local
+
+```bash
+# Clonar repositorio
+git clone https://github.com/dgr369/api-savp.git
+cd api-savp
+
+# Instalar dependencias
+pip install -r requirements.txt
+
+# Ejecutar
+uvicorn main:app --reload --port 8000
+```
+
+Abre: http://localhost:8000/docs
+
+---
+
+## 📦 Dependencias
+
+```
+fastapi>=0.110.0
+uvicorn[standard]>=0.27.0
+kerykeion>=5.7.0
+pytz>=2024.1
+pydantic>=2.6.0
+geopy>=2.4.1
 ```
 
 ---
 
-## CONECTAR AL GPT
+## 🌍 Geocoding
 
-### 1. En GPT Builder → Configure → Actions
+La API usa **Nominatim (OpenStreetMap)** para geocodificar automáticamente cualquier ciudad del mundo:
 
-### 2. Añadir Schema OpenAPI
+- **Gratis** (sin API key)
+- **Sin límites** para uso razonable
+- **Fallback** a diccionario de 25+ ciudades españolas
+
+**Ejemplos**:
+- ✅ "Zaragoza, España"
+- ✅ "Dartford, UK"
+- ✅ "Příbor, República Checa"
+- ✅ "New York, USA"
+
+---
+
+## 🏠 Sistemas de Casas
+
+Soportados vía parámetro `house_system`:
+
+- `"P"` → **Placidus** (default, recomendado para SAVP)
+- `"W"` → Whole Sign
+- `"E"` → Equal
+- `"K"` → Koch
+- `"R"` → Regiomontanus
+
+---
+
+## 🔧 Configuración Avanzada
+
+### Coordenadas Manuales
+Si el geocoding falla o quieres precisión máxima:
 
 ```json
 {
-  "openapi": "3.1.0",
-  "info": {
-    "title": "API Astrológica SAVP",
-    "version": "1.0.0"
-  },
-  "servers": [
-    {
-      "url": "https://tu-api.onrender.com"
-    }
-  ],
-  "paths": {
-    "/natal": {
-      "post": {
-        "summary": "Calcular carta natal",
-        "operationId": "calcularNatal",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "nombre": {"type": "string"},
-                  "fecha": {"type": "string", "format": "date"},
-                  "hora": {"type": "string"},
-                  "ciudad": {"type": "string"},
-                  "pais": {"type": "string"},
-                  "timezone": {"type": "string"}
-                },
-                "required": ["nombre", "fecha", "hora", "ciudad", "pais"]
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Carta natal calculada"
-          }
-        }
-      }
-    },
-    "/transits": {
-      "post": {
-        "summary": "Calcular tránsitos",
-        "operationId": "calcularTransitos",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "nombre": {"type": "string"},
-                  "fecha_natal": {"type": "string"},
-                  "hora_natal": {"type": "string"},
-                  "ciudad_natal": {"type": "string"},
-                  "pais_natal": {"type": "string"},
-                  "timezone_natal": {"type": "string"},
-                  "fecha_transito": {"type": "string"}
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/solar_return": {
-      "post": {
-        "summary": "Calcular revolución solar",
-        "operationId": "calcularRevolucionSolar",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "nombre": {"type": "string"},
-                  "fecha_natal": {"type": "string"},
-                  "hora_natal": {"type": "string"},
-                  "ciudad_natal": {"type": "string"},
-                  "pais_natal": {"type": "string"},
-                  "año_revolucion": {"type": "integer"}
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-  }
+  "lat_natal": 41.5167,
+  "lon_natal": -0.6333
 }
 ```
 
-### 3. Guardar y probar
-
-El GPT ahora puede calcular cartas natales, tránsitos y revoluciones solares automáticamente.
-
----
-
-## TESTING
-
-### Ejemplo con cURL
-
-```bash
-curl -X POST "http://localhost:8000/natal" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "nombre": "Test",
-    "fecha": "1990-01-01",
-    "hora": "12:00",
-    "ciudad": "Madrid",
-    "pais": "España"
-  }'
+### Zona Horaria Personalizada
+```json
+{
+  "timezone_natal": "America/New_York"
+}
 ```
 
----
-
-## MEJORAS FUTURAS
-
-- [ ] Geocoding automático con API (Google Maps, OpenCage)
-- [ ] Cálculo de aspectos
-- [ ] Progresiones secundarias
-- [ ] Direcciones primarias
-- [ ] Cache de resultados (Redis)
-- [ ] Autenticación (API keys)
+Ver: https://en.wikipedia.org/wiki/List_of_tz_database_time_zones
 
 ---
 
-## SOPORTE
+## 🎯 Uso con GPT (Actions)
 
-**Kerykeion Documentation**: https://github.com/g-battaglia/kerykeion
-**FastAPI Documentation**: https://fastapi.tiangolo.com/
+1. **GPT Builder** → Configure → Actions
+2. **Import from URL**: `https://api-savp.onrender.com/openapi.json`
+3. O copiar schema de `Schema_OpenAPI_v1.3_FINAL.md`
+
+**Instrucciones del GPT**: Ver `Instrucciones_Core_GPT.md`
 
 ---
 
-## LICENCIA
+## ⚠️ Limitaciones Conocidas
 
-Uso libre para SAVP v3.5
+1. **Revolución Solar**: Momento exacto aproximado (±2 horas)
+2. **Render Free Tier**: Cold start 30-60s tras inactividad
+3. **Efemérides**: Rango 1900-2100 (limitación de Kerykeion)
+
+---
+
+## 📝 Changelog
+
+### v1.3 (Actual)
+- ✅ Casas natales para tránsitos (`use_natal_houses`)
+- ✅ Nodos lunares (true_node)
+- ✅ Revolución Solar con momento del retorno
+- ✅ Geocoding internacional (Nominatim)
+- ✅ Compatible Kerykeion 5.7.0
+
+### v1.2
+- Soporte `houses_system_identifier`
+- Hora de tránsito opcional
+
+### v1.0
+- Release inicial
+
+---
+
+## 🐛 Troubleshooting
+
+**"Error: No matching distribution found for kerykeion"**  
+→ Usar `kerykeion>=5.7.0` (no versiones 4.x)
+
+**"Casas incorrectas en tránsitos"**  
+→ Verificar `use_natal_houses: true`
+
+**"Nodos no aparecen"**  
+→ Están en `planetas.nodo_norte` y `planetas.nodo_sur`
+
+**"Geocoding falla"**  
+→ Pasar `lat` y `lon` manualmente
+
+---
+
+## 📄 Licencia
+
+Proyecto privado - Uso exclusivo para SAVP v3.5
+
+---
+
+## 👤 Autor
+
+David García Ramos  
+Sistema Árbol de la Vida Personal v3.5
+
+---
+
+## 🔗 Enlaces
+
+- **API**: https://api-savp.onrender.com
+- **Docs**: https://api-savp.onrender.com/docs
+- **Kerykeion**: https://github.com/g-battaglia/kerykeion
