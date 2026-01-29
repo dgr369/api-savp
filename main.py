@@ -296,30 +296,35 @@ def get_mean_node(subject):
     Kerykeion 5.x no provee mean_node, así que lo calculamos manualmente
     """
     try:
-        import swisseph as swe
-        from datetime import datetime
+        # Usar pyswisseph que Kerykeion incluye como dependencia
+        from kerykeion.settings import get_settings
+        settings = get_settings()
+        swe = settings.swe
         
-        # Configurar fecha juliana
+        # Configurar fecha juliana (UTC)
         year = subject.year
         month = subject.month
         day = subject.day
         hour = subject.hour + (subject.minute / 60.0)
         
-        # Convertir a fecha juliana
+        # Convertir a fecha juliana (usando UTC)
         jd = swe.julday(year, month, day, hour)
         
-        # Calcular Nodo Norte Medio (SE_MEAN_NODE = 10)
-        # swe.calc_ut retorna: (longitude, latitude, distance, speed_long, speed_lat, speed_dist)
-        result = swe.calc_ut(jd, swe.MEAN_NODE)
+        # Calcular Nodo Norte Medio
+        # 10 = SE_MEAN_NODE en pyswisseph
+        # calc_ut retorna tupla: (longitude, latitude, distance, speed_long, speed_lat, speed_dist)
+        result = swe.calc_ut(jd, 10)
         
-        if result and len(result) > 0:
-            longitude = result[0][0]  # Longitud eclíptica (0-360)
+        if result and len(result) >= 2:
+            longitude = result[0]  # Longitud eclíptica 0-360
             
             # Convertir a signo + grado
             signos = ['Ari', 'Tau', 'Gem', 'Can', 'Leo', 'Vir', 
                      'Lib', 'Sco', 'Sag', 'Cap', 'Aqu', 'Pis']
             sign_num = int(longitude / 30)
             degree = longitude % 30
+            
+            print(f"DEBUG mean_node: longitude={longitude:.2f}, sign={signos[sign_num]}, degree={degree:.2f}")
             
             return {
                 "grado": round(degree, 2),
@@ -329,8 +334,11 @@ def get_mean_node(subject):
             }
     except Exception as e:
         print(f"ERROR calculando mean_node: {e}")
+        import traceback
+        traceback.print_exc()
     
     # Fallback: usar true_node si mean_node falla
+    print("FALLBACK: usando true_node en lugar de mean_node")
     return get_planet_data(subject, 'true_node')
 
 def formatear_posiciones(subject: AstrologicalSubject, reference_subject: Optional[AstrologicalSubject] = None):
