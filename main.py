@@ -1,4 +1,4 @@
-
+"""
 API Astrológica para SAVP v3.5
 Versión CORREGIDA - Compatible con Kerykeion 5.7.0
 
