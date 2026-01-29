@@ -180,6 +180,9 @@ def calcular_casa_en_carta_natal(planeta_grado_abs, natal_subject):
             if hasattr(natal_subject, house_attr):
                 house = getattr(natal_subject, house_attr)
                 
+                # DEBUG: Ver qué devuelve
+                print(f"DEBUG Casa {i}: type={type(house)}, value={house}")
+                
                 # Obtener position y sign
                 if isinstance(house, dict):
                     pos = house.get('position', 0)
@@ -193,9 +196,14 @@ def calcular_casa_en_carta_natal(planeta_grado_abs, natal_subject):
                 sign_idx = signos_map.get(sign_short, 0)
                 abs_pos = (sign_idx * 30 + pos) % 360
                 houses_abs.append(abs_pos)
+                
+                print(f"DEBUG Casa {i}: {pos}° {sign} = {abs_pos}° absoluto")
             else:
                 # Fallback: casas iguales
                 houses_abs.append(((i-1) * 30) % 360)
+        
+        # DEBUG: Mostrar planeta
+        print(f"DEBUG Planeta: {planeta_grado_abs}° absoluto")
         
         # Normalizar grado del planeta
         grado_norm = planeta_grado_abs % 360
@@ -209,16 +217,21 @@ def calcular_casa_en_carta_natal(planeta_grado_abs, natal_subject):
             if cusp_siguiente < cusp_actual:
                 # Casa cruza 0° Aries
                 if grado_norm >= cusp_actual or grado_norm < cusp_siguiente:
+                    print(f"DEBUG → Casa {casa+1} (cruce 0°)")
                     return casa + 1
             else:
                 # Casa normal
                 if cusp_actual <= grado_norm < cusp_siguiente:
+                    print(f"DEBUG → Casa {casa+1} (normal)")
                     return casa + 1
         
+        print("DEBUG → Fallback Casa 1")
         return 1  # Fallback
         
     except Exception as e:
-        print(f"Error calculando casa: {e}")
+        print(f"ERROR calculando casa: {e}")
+        import traceback
+        traceback.print_exc()
         return 1  # Fallback seguro
 
 def grado_absoluto_desde_signo(grado, signo):
