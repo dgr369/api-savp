@@ -333,7 +333,7 @@ def calcular_natal(request: NatalRequest):
             lat=lat,
             lng=lon,
             tz_str=request.timezone,
-            houses_system=request.house_system
+            houses_system_identifier=request.house_system
         )
         
         posiciones = formatear_posiciones(subject)
@@ -372,7 +372,7 @@ def calcular_transitos(request: TransitsRequest):
             lat=lat_natal,
             lng=lon_natal,
             tz_str=request.timezone_natal,
-            houses_system=request.house_system
+            houses_system_identifier=request.house_system
         )
         
         if request.fecha_transito:
@@ -402,7 +402,7 @@ def calcular_transitos(request: TransitsRequest):
             lat=lat_natal,
             lng=lon_natal,
             tz_str=request.timezone_natal,
-            houses_system=request.house_system
+            houses_system_identifier=request.house_system
         )
         
         # Formatear posiciones
@@ -445,7 +445,7 @@ def calcular_revolucion_solar(request: SolarReturnRequest):
             lat=lat,
             lng=lon,
             tz_str=request.timezone_natal,
-            houses_system=request.house_system
+            houses_system_identifier=request.house_system
         )
         
         return {
