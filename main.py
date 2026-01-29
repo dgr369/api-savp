@@ -1,6 +1,9 @@
 """
 API Astrológica para SAVP v3.5
 Versión CORREGIDA - Compatible con Kerykeion 5.7.0
+- Nodos: mean node + casas calculadas correctamente
+- Casas: normalizadas SIEMPRE a enteros 1..12 (aunque Kerykeion devuelva "Third_House")
+- Geocoding: timeout mayor + cache simple para evitar timeouts en Render
 """
 
 from fastapi import FastAPI, HTTPException
@@ -8,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from datetime import datetime
 from kerykeion import AstrologicalSubject
-from typing import Optional
+from typing import Optional, Any, Tuple
 
 app = FastAPI(
     title="API Astrológica SAVP v3.5",
@@ -24,6 +27,47 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Cache simple en memoria para geocode (reduce llamadas a Nominatim)
+GEOCODE_CACHE: dict[Tuple[str, str], Tuple[float, float]] = {}
+
+# Normalización de casas (Kerykeion a veces devuelve "Third_House", etc.)
+HOUSE_NAME_TO_NUM = {
+    "FIRST_HOUSE": 1,
+    "SECOND_HOUSE": 2,
+    "THIRD_HOUSE": 3,
+    "FOURTH_HOUSE": 4,
+    "FIFTH_HOUSE": 5,
+    "SIXTH_HOUSE": 6,
+    "SEVENTH_HOUSE": 7,
+    "EIGHTH_HOUSE": 8,
+    "NINTH_HOUSE": 9,
+    "TENTH_HOUSE": 10,
+    "ELEVENTH_HOUSE": 11,
+    "TWELFTH_HOUSE": 12,
+}
+
+def normalize_house(house_value: Any) -> int:
+    """
+    Convierte el valor 'house' a int 1..12.
+    Soporta:
+      - int (1..12)
+      - str ("Third_House", "TENTH_HOUSE", etc.)
+      - None -> 1
+    """
+    if house_value is None:
+        return 1
+    if isinstance(house_value, int):
+        return house_value if 1 <= house_value <= 12 else 1
+    if isinstance(house_value, float):
+        iv = int(house_value)
+        return iv if 1 <= iv <= 12 else 1
+    if isinstance(house_value, str):
+        key = house_value.strip().upper()
+        # soporta "Third_House" o "third_house"
+        return HOUSE_NAME_TO_NUM.get(key, 1)
+    return 1
+
 
 # MODELOS
 class NatalRequest(BaseModel):
@@ -70,16 +114,13 @@ def parse_fecha_hora(fecha_str: str, hora_str: str):
     try:
         # Formato esperado: YYYY-MM-DD o DD/MM/YYYY
         if "/" in fecha_str:
-            # Convertir DD/MM/YYYY a YYYY-MM-DD
             parts = fecha_str.split("/")
             fecha_str = f"{parts[2]}-{parts[1]}-{parts[0]}"
 
-        # Parsear
         fecha = datetime.strptime(fecha_str, "%Y-%m-%d")
         hora_parts = hora_str.split(":")
         hour = int(hora_parts[0])
         minute = int(hora_parts[1]) if len(hora_parts) > 1 else 0
-
         return fecha.year, fecha.month, fecha.day, hour, minute
 
     except Exception as e:
@@ -87,17 +128,23 @@ def parse_fecha_hora(fecha_str: str, hora_str: str):
 
 
 def geocode_ciudad(ciudad: str, pais: str):
-    """Geocodifica ciudad usando geopy"""
+    """Geocodifica ciudad usando geopy (con cache y timeout apto para Render)"""
     try:
+        key = (ciudad.strip().lower(), pais.strip().lower())
+        if key in GEOCODE_CACHE:
+            return GEOCODE_CACHE[key]
+
         from geopy.geocoders import Nominatim
 
-        geolocator = Nominatim(user_agent="savp_astrology_api")
-        location = geolocator.geocode(f"{ciudad}, {pais}")
+        geolocator = Nominatim(user_agent="savp_astrology_api", timeout=10)
+        location = geolocator.geocode(f"{ciudad}, {pais}", exactly_one=True)
 
         if not location:
             raise HTTPException(status_code=404, detail=f"No se encontró la ciudad: {ciudad}, {pais}")
 
-        return location.latitude, location.longitude
+        lat, lon = location.latitude, location.longitude
+        GEOCODE_CACHE[key] = (lat, lon)
+        return lat, lon
 
     except HTTPException:
         raise
@@ -106,34 +153,29 @@ def geocode_ciudad(ciudad: str, pais: str):
 
 
 def get_planet_data(subject: AstrologicalSubject, planet_name: str):
-    """Extrae datos de un planeta en Kerykeion 5.x"""
+    """Extrae datos de un planeta/punto en Kerykeion 5.x y normaliza 'casa' a int"""
     try:
         if not hasattr(subject, planet_name):
             return None
 
         planet = getattr(subject, planet_name)
-        # Kerykeion 5.x devuelve objetos con atributos
+
         if isinstance(planet, dict):
-            # Formato dict
-            casa = planet.get("house", 1)
+            casa_raw = planet.get("house", 1)
             return {
                 "grado": round(planet.get("position", 0), 2),
                 "signo": planet.get("sign", ""),
-                "casa": casa,
-                "retrogrado": planet.get("retrograde", False)
+                "casa": normalize_house(casa_raw),
+                "retrogrado": planet.get("retrograde", False),
             }
         else:
-            # Formato objeto
-            try:
-                casa = getattr(planet, "house", 1)
-                return {
-                    "grado": round(getattr(planet, "position", 0), 2),
-                    "signo": getattr(planet, "sign", ""),
-                    "casa": casa,
-                    "retrogrado": getattr(planet, "retrograde", False)
-                }
-            except Exception:
-                return None
+            casa_raw = getattr(planet, "house", 1)
+            return {
+                "grado": round(getattr(planet, "position", 0), 2),
+                "signo": getattr(planet, "sign", ""),
+                "casa": normalize_house(casa_raw),
+                "retrogrado": getattr(planet, "retrograde", False),
+            }
 
     except Exception as e:
         print(f"Error get_planet_data {planet_name}: {e}")
@@ -145,27 +187,23 @@ def grado_absoluto_desde_signo(grado: float, signo: str) -> float:
     signos = ["Ari", "Tau", "Gem", "Can", "Leo", "Vir",
               "Lib", "Sco", "Sag", "Cap", "Aqu", "Pis"]
     if signo not in signos:
-        return grado
+        return float(grado)
 
     signo_index = signos.index(signo)
-    return signo_index * 30 + grado
+    return signo_index * 30 + float(grado)
 
 
-# ✅ CORREGIDO: lectura de cúspides compatible con Kerykeion 5.x
 def calcular_casa_en_carta_natal(grado_absoluto: float, subject_natal: AstrologicalSubject) -> int:
     """
     Calcula en qué casa cae un grado absoluto (0-360) usando las cúspides del subject_natal.
-
     Compatible con Kerykeion 5.x (first_house..twelfth_house) y variantes.
     """
     try:
-        # Orden de cúspides en Kerykeion 5.x
         house_attrs_v5 = [
             "first_house", "second_house", "third_house", "fourth_house",
             "fifth_house", "sixth_house", "seventh_house", "eighth_house",
             "ninth_house", "tenth_house", "eleventh_house", "twelfth_house"
         ]
-        # Fallback por si existieran house1..house12
         house_attrs_num = [f"house{i}" for i in range(1, 13)]
 
         def _extract_pos_sign(house_obj):
@@ -177,14 +215,14 @@ def calcular_casa_en_carta_natal(grado_absoluto: float, subject_natal: Astrologi
 
         casas_abs = []
 
-        # A) first_house..twelfth_house
+        # A) Kerykeion 5.x
         for attr in house_attrs_v5:
             if hasattr(subject_natal, attr):
                 g, s = _extract_pos_sign(getattr(subject_natal, attr))
                 if s:
                     casas_abs.append(grado_absoluto_desde_signo(g, s))
 
-        # B) house1..house12
+        # B) Fallback house1..house12
         if len(casas_abs) != 12:
             casas_abs = []
             for attr in house_attrs_num:
@@ -193,7 +231,7 @@ def calcular_casa_en_carta_natal(grado_absoluto: float, subject_natal: Astrologi
                     if s:
                         casas_abs.append(grado_absoluto_desde_signo(g, s))
 
-        # C) subject_natal.houses / houses_list (si existiera)
+        # C) Fallback houses/houses_list
         if len(casas_abs) != 12:
             casas_abs = []
             if hasattr(subject_natal, "houses") and subject_natal.houses:
@@ -242,31 +280,19 @@ def calcular_casa_en_carta_natal(grado_absoluto: float, subject_natal: Astrologi
 
 def get_mean_node(subject):
     """
-    Calcula el Nodo Norte Medio usando fórmula astronómica
-    (sin pyswisseph, que no compila en Render)
-
-    Fórmula de Jean Meeus (Astronomical Algorithms):
-    Nodo Medio = 125.04452° - 1934.136261° × T + 0.0020708° × T² + T³ / 450000
-    donde T = (JD - 2451545.0) / 36525 (siglos julianos desde J2000)
+    Calcula el Nodo Norte Medio usando fórmula astronómica (Meeus)
+    sin pyswisseph (para Render).
     """
     try:
-        from datetime import datetime
+        from datetime import datetime as dt
         import pytz
 
-        # Fecha juliana J2000 (1 enero 2000 12:00 UTC)
         J2000 = 2451545.0
 
-        # Crear datetime con timezone
         tz = pytz.timezone(subject.tz_str)
-        dt_local = tz.localize(datetime(
-            subject.year, subject.month, subject.day,
-            subject.hour, subject.minute
-        ))
-
-        # Convertir a UTC
+        dt_local = tz.localize(dt(subject.year, subject.month, subject.day, subject.hour, subject.minute))
         dt_utc = dt_local.astimezone(pytz.UTC)
 
-        # Calcular fecha juliana (algoritmo estándar)
         y = dt_utc.year
         m = dt_utc.month
         d = dt_utc.day
@@ -282,57 +308,32 @@ def get_mean_node(subject):
         jd = int(365.25 * (y + 4716)) + int(30.6001 * (m + 1)) + d + B - 1524.5
         jd += h / 24.0
 
-        # Siglos julianos desde J2000
         T = (jd - J2000) / 36525.0
 
-        # Fórmula del Nodo Medio (Meeus)
         omega = 125.04452 - 1934.136261 * T + 0.0020708 * T**2 + T**3 / 450000.0
+        longitude = omega % 360.0
 
-        # Normalizar a 0-360
-        omega = omega % 360.0
-        longitude = omega
-
-        # Convertir a signo y grado
         sign_num = int(longitude / 30)
         degree = longitude % 30
 
         signos = ["Ari", "Tau", "Gem", "Can", "Leo", "Vir",
                   "Lib", "Sco", "Sag", "Cap", "Aqu", "Pis"]
 
-        # DEBUG
         print(f"DEBUG mean_node: JD={jd:.5f}, T={T:.8f}")
         print(f"DEBUG mean_node: longitude={longitude:.2f}°, {signos[sign_num]} {degree:.2f}°")
 
-        return {
-            "grado": round(degree, 2),
-            "signo": signos[sign_num],
-            "retrogrado": True
-        }
+        return {"grado": round(degree, 2), "signo": signos[sign_num], "retrogrado": True}
 
     except Exception as e:
         print(f"ERROR calculando mean_node: {e}")
-        import traceback
-        traceback.print_exc()
-
-        # Fallback: usar true_node
         print("FALLBACK: usando true_node")
         return get_planet_data(subject, "true_node")
 
 
 def formatear_posiciones(subject: AstrologicalSubject, reference_subject: Optional[AstrologicalSubject] = None):
-    """
-    Extrae posiciones planetarias - Compatible con Kerykeion 5.x
-
-    Args:
-        subject: Carta a formatear
-        reference_subject: Si se proporciona, las casas se calculan con respecto a esta carta
-                          (útil para tránsitos en casas natales)
-    """
+    """Extrae posiciones planetarias y puntos, con nodos y casas consistentes."""
     planetas = {}
 
-    # Si reference_subject está presente, recalculamos casas en casas natales (para tránsitos)
-
-    # Mapeo de nombres
     planet_map = {
         "sol": "sun",
         "luna": "moon",
@@ -349,62 +350,42 @@ def formatear_posiciones(subject: AstrologicalSubject, reference_subject: Option
     for esp, eng in planet_map.items():
         data = get_planet_data(subject, eng)
         if data:
-            # Si usamos casas de referencia (casas natales), recalcular
+            # Si estamos calculando tránsitos en casas natales:
             if reference_subject:
                 grado_abs = grado_absoluto_desde_signo(data["grado"], data["signo"])
-                casa_natal = calcular_casa_en_carta_natal(grado_abs, reference_subject)
-                data["casa"] = casa_natal
+                data["casa"] = calcular_casa_en_carta_natal(grado_abs, reference_subject)
 
+            # ✅ asegura int 1..12 aunque Kerykeion devuelva string
+            data["casa"] = normalize_house(data.get("casa"))
             planetas[esp] = data
 
-    # ✅ CORREGIDO: Nodos lunares - calcular casa SIEMPRE
+    # Nodos: mean node + casa SIEMPRE calculada
     nodo_norte_data = get_mean_node(subject)
     if nodo_norte_data:
-        # Calcular casa SIEMPRE: en natal con la propia carta; en tránsitos con reference_subject
         ref = reference_subject if reference_subject else subject
         grado_abs = grado_absoluto_desde_signo(nodo_norte_data["grado"], nodo_norte_data["signo"])
         nodo_norte_data["casa"] = calcular_casa_en_carta_natal(grado_abs, ref)
-
         planetas["nodo_norte"] = nodo_norte_data
 
-        # Nodo Sur (opuesto al Norte)
-        nodo_sur_grado = nodo_norte_data["grado"]
-        nodo_sur_signo_idx = (["Ari", "Tau", "Gem", "Can", "Leo", "Vir",
-                               "Lib", "Sco", "Sag", "Cap", "Aqu", "Pis"].index(nodo_norte_data["signo"]) + 6) % 12
-        nodo_sur_signo = ["Ari", "Tau", "Gem", "Can", "Leo", "Vir",
-                          "Lib", "Sco", "Sag", "Cap", "Aqu", "Pis"][nodo_sur_signo_idx]
+        # Nodo Sur (opuesto)
+        signos = ["Ari", "Tau", "Gem", "Can", "Leo", "Vir",
+                  "Lib", "Sco", "Sag", "Cap", "Aqu", "Pis"]
+        nodo_sur_signo_idx = (signos.index(nodo_norte_data["signo"]) + 6) % 12
+        nodo_sur_data = {"grado": nodo_norte_data["grado"], "signo": signos[nodo_sur_signo_idx], "retrogrado": True}
 
-        nodo_sur_data = {
-            "grado": nodo_sur_grado,
-            "signo": nodo_sur_signo,
-            "retrogrado": True
-        }
-
-        # Calcular casa SIEMPRE: en natal con la propia carta; en tránsitos con reference_subject
-        ref = reference_subject if reference_subject else subject
         grado_abs = grado_absoluto_desde_signo(nodo_sur_data["grado"], nodo_sur_data["signo"])
         nodo_sur_data["casa"] = calcular_casa_en_carta_natal(grado_abs, ref)
-
         planetas["nodo_sur"] = nodo_sur_data
 
-    # Puntos especiales
     puntos = {}
 
-    # ASC
     asc_data = get_planet_data(subject, "first_house")
     if asc_data:
-        puntos["asc"] = {
-            "grado": asc_data["grado"],
-            "signo": asc_data["signo"]
-        }
+        puntos["asc"] = {"grado": asc_data["grado"], "signo": asc_data["signo"]}
 
-    # MC
     mc_data = get_planet_data(subject, "tenth_house")
     if mc_data:
-        puntos["mc"] = {
-            "grado": mc_data["grado"],
-            "signo": mc_data["signo"]
-        }
+        puntos["mc"] = {"grado": mc_data["grado"], "signo": mc_data["signo"]}
 
     return {"planetas": planetas, "puntos": puntos}
 
@@ -412,7 +393,7 @@ def formatear_posiciones(subject: AstrologicalSubject, reference_subject: Option
 # ENDPOINTS
 @app.get("/")
 def root():
-    return {"ok": True, "message": "SAVP v3.5 API running"}
+    return {"ok": True, "message": "SAVP v3.5 API running", "endpoints": ["/natal", "/transits", "/solar_return", "/test_nodos"]}
 
 
 @app.get("/health")
@@ -423,18 +404,22 @@ def health():
 @app.post("/natal")
 def calcular_natal(request: NatalRequest):
     try:
-        lat, lon = (request.lat, request.lon) if request.lat and request.lon else geocode_ciudad(request.ciudad, request.pais)
+        # Coordenadas
+        if request.lat is not None and request.lon is not None:
+            lat, lon = request.lat, request.lon
+        else:
+            lat, lon = geocode_ciudad(request.ciudad, request.pais)
 
-        fecha_dt = datetime.strptime(request.fecha, "%Y-%m-%d")
-        hora_parts = request.hora.split(":")
+        # Fecha/hora
+        year, month, day, hour, minute = parse_fecha_hora(request.fecha, request.hora)
 
         subject = AstrologicalSubject(
             name=request.nombre,
-            year=fecha_dt.year,
-            month=fecha_dt.month,
-            day=fecha_dt.day,
-            hour=int(hora_parts[0]),
-            minute=int(hora_parts[1]),
+            year=year,
+            month=month,
+            day=day,
+            hour=hour,
+            minute=minute,
             city=request.ciudad,
             nation=request.pais,
             lat=lat,
@@ -456,6 +441,9 @@ def calcular_natal(request: NatalRequest):
             },
             "carta": carta
         }
+
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
 
@@ -463,211 +451,113 @@ def calcular_natal(request: NatalRequest):
 @app.post("/transits")
 def calcular_transitos(request: TransitsRequest):
     try:
-        lat_natal, lon_natal = (request.lat_natal, request.lon_natal) if request.lat_natal and request.lon_natal else geocode_ciudad(request.ciudad_natal, request.pais_natal)
+        # Natal: coords
+        if request.lat_natal is not None and request.lon_natal is not None:
+            lat_n, lon_n = request.lat_natal, request.lon_natal
+        else:
+            lat_n, lon_n = geocode_ciudad(request.ciudad_natal, request.pais_natal)
 
-        fecha_natal_dt = datetime.strptime(request.fecha_natal, "%Y-%m-%d")
-        hora_natal_parts = request.hora_natal.split(":")
+        # Natal: fecha/hora
+        y_n, m_n, d_n, h_n, mi_n = parse_fecha_hora(request.fecha_natal, request.hora_natal)
 
-        natal = AstrologicalSubject(
+        natal_subject = AstrologicalSubject(
             name=request.nombre,
-            year=fecha_natal_dt.year,
-            month=fecha_natal_dt.month,
-            day=fecha_natal_dt.day,
-            hour=int(hora_natal_parts[0]),
-            minute=int(hora_natal_parts[1]),
+            year=y_n,
+            month=m_n,
+            day=d_n,
+            hour=h_n,
+            minute=mi_n,
             city=request.ciudad_natal,
             nation=request.pais_natal,
-            lat=lat_natal,
-            lng=lon_natal,
+            lat=lat_n,
+            lng=lon_n,
             tz_str=request.timezone_natal,
             houses_system_identifier=request.house_system
         )
 
-        if request.fecha_transito:
-            fecha_transito_dt = datetime.strptime(request.fecha_transito, "%Y-%m-%d")
-            # Si se proporciona hora_transito, usarla; sino 12:00
-            if request.hora_transito:
-                hora_parts = request.hora_transito.split(":")
-                hora_t = int(hora_parts[0])
-                minuto_t = int(hora_parts[1])
-            else:
-                hora_t = 12
-                minuto_t = 0
+        # Tránsito: fecha/hora (default ahora)
+        if request.fecha_transito and request.hora_transito:
+            y_t, m_t, d_t, h_t, mi_t = parse_fecha_hora(request.fecha_transito, request.hora_transito)
         else:
-            fecha_transito_dt = datetime.now()
-            hora_t = fecha_transito_dt.hour
-            minuto_t = fecha_transito_dt.minute
+            now = datetime.now()
+            y_t, m_t, d_t, h_t, mi_t = now.year, now.month, now.day, now.hour, now.minute
 
-        transitos = AstrologicalSubject(
-            name="Tránsitos",
-            year=fecha_transito_dt.year,
-            month=fecha_transito_dt.month,
-            day=fecha_transito_dt.day,
-            hour=hora_t,
-            minute=minuto_t,
+        transit_subject = AstrologicalSubject(
+            name="Transitos",
+            year=y_t,
+            month=m_t,
+            day=d_t,
+            hour=h_t,
+            minute=mi_t,
             city=request.ciudad_natal,
             nation=request.pais_natal,
-            lat=lat_natal,
-            lng=lon_natal,
+            lat=lat_n,
+            lng=lon_n,
             tz_str=request.timezone_natal,
             houses_system_identifier=request.house_system
         )
 
-        # Formatear posiciones
-        natal_pos = formatear_posiciones(natal)
+        natal = formatear_posiciones(natal_subject)
 
-        # Si use_natal_houses=True, calcular tránsitos en casas natales
         if request.use_natal_houses:
-            transitos_pos = formatear_posiciones(transitos, reference_subject=natal)
+            transitos = formatear_posiciones(transit_subject, reference_subject=natal_subject)
         else:
-            transitos_pos = formatear_posiciones(transitos)
+            transitos = formatear_posiciones(transit_subject)
 
-        return {
-            "success": True,
-            "fecha_transito": fecha_transito_dt.strftime("%Y-%m-%d"),
-            "hora_transito": f"{hora_t:02d}:{minuto_t:02d}",
-            "use_natal_houses": request.use_natal_houses,
-            "natal": natal_pos,
-            "transitos": transitos_pos
-        }
+        return {"success": True, "natal": natal, "transitos": transitos}
+
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
 
 
-def calcular_momento_retorno_solar(fecha_natal_dt, hora_natal, año_revolucion, lat, lon, timezone):
-    """
-    Calcula el momento exacto cuando el Sol vuelve a su posición natal
-
-    Returns:
-        tuple: (año, mes, dia, hora, minuto) del retorno exacto
-    """
-    from datetime import timedelta
-
-    # Obtener posición natal del Sol
-    hora_parts = hora_natal.split(":")
-    natal_subject = AstrologicalSubject(
-        name="Natal",
-        year=fecha_natal_dt.year,
-        month=fecha_natal_dt.month,
-        day=fecha_natal_dt.day,
-        hour=int(hora_parts[0]),
-        minute=int(hora_parts[1]),
-        lat=lat,
-        lng=lon,
-        tz_str=timezone,
-        city="",
-        nation=""
-    )
-
-    sol_natal_pos = get_planet_data(natal_subject, "sun")
-    if not sol_natal_pos:
-        raise ValueError("No se pudo obtener la posición natal del Sol")
-
-    sol_natal_grado = grado_absoluto_desde_signo(sol_natal_pos["grado"], sol_natal_pos["signo"])
-
-    # Comenzar búsqueda alrededor del cumpleaños (aproximación)
-    fecha_inicio = datetime(año_revolucion, fecha_natal_dt.month, fecha_natal_dt.day, 0, 0)
-    mejor_dt = None
-    mejor_diff = 999999
-
-    # Buscar minuto a minuto en un rango de +/- 24h (2880 minutos)
-    for offset_min in range(-1440, 1441):
-        dt = fecha_inicio + timedelta(minutes=offset_min)
-
-        subject_temp = AstrologicalSubject(
-            name="Temp",
-            year=dt.year,
-            month=dt.month,
-            day=dt.day,
-            hour=dt.hour,
-            minute=dt.minute,
-            lat=lat,
-            lng=lon,
-            tz_str=timezone,
-            city="",
-            nation=""
-        )
-
-        sol_temp = get_planet_data(subject_temp, "sun")
-        if not sol_temp:
-            continue
-
-        sol_temp_grado = grado_absoluto_desde_signo(sol_temp["grado"], sol_temp["signo"])
-
-        # Diferencia circular
-        diff = abs(sol_temp_grado - sol_natal_grado)
-        diff = min(diff, 360 - diff)
-
-        if diff < mejor_diff:
-            mejor_diff = diff
-            mejor_dt = dt
-
-    if not mejor_dt:
-        raise ValueError("No se pudo calcular el retorno solar")
-
-    return mejor_dt.year, mejor_dt.month, mejor_dt.day, mejor_dt.hour, mejor_dt.minute
-
-
 @app.post("/solar_return")
 def calcular_revolucion_solar(request: SolarReturnRequest):
+    """
+    Nota: este endpoint sigue siendo aproximación si no haces búsqueda exacta del retorno solar.
+    (Si quieres, lo afinamos luego.)
+    """
     try:
-        lat_natal, lon_natal = (request.lat_natal, request.lon_natal) if request.lat_natal and request.lon_natal else geocode_ciudad(request.ciudad_natal, request.pais_natal)
+        if request.lat_natal is not None and request.lon_natal is not None:
+            lat_n, lon_n = request.lat_natal, request.lon_natal
+        else:
+            lat_n, lon_n = geocode_ciudad(request.ciudad_natal, request.pais_natal)
 
-        fecha_natal_dt = datetime.strptime(request.fecha_natal, "%Y-%m-%d")
+        y_n, m_n, d_n, h_n, mi_n = parse_fecha_hora(request.fecha_natal, request.hora_natal)
 
-        # Calcular momento exacto del retorno solar
-        y, m, d, h, mi = calcular_momento_retorno_solar(
-            fecha_natal_dt=fecha_natal_dt,
-            hora_natal=request.hora_natal,
-            año_revolucion=request.año_revolucion,
-            lat=lat_natal,
-            lon=lon_natal,
-            timezone=request.timezone_natal
-        )
-
-        # Construir carta de revolución solar
-        sr = AstrologicalSubject(
-            name=f"RS {request.año_revolucion}",
-            year=y, month=m, day=d, hour=h, minute=mi,
-            city=request.ciudad_natal,
-            nation=request.pais_natal,
-            lat=lat_natal,
-            lng=lon_natal,
-            tz_str=request.timezone_natal,
+        natal_subject = AstrologicalSubject(
+            name=request.nombre,
+            year=y_n, month=m_n, day=d_n, hour=h_n, minute=mi_n,
+            city=request.ciudad_natal, nation=request.pais_natal,
+            lat=lat_n, lng=lon_n, tz_str=request.timezone_natal,
             houses_system_identifier=request.house_system
         )
 
-        # Carta natal (para devolver también)
-        hora_parts = request.hora_natal.split(":")
-        natal = AstrologicalSubject(
-            name=request.nombre,
-            year=fecha_natal_dt.year,
-            month=fecha_natal_dt.month,
-            day=fecha_natal_dt.day,
-            hour=int(hora_parts[0]),
-            minute=int(hora_parts[1]),
-            city=request.ciudad_natal,
-            nation=request.pais_natal,
-            lat=lat_natal,
-            lng=lon_natal,
-            tz_str=request.timezone_natal,
+        # Aproximación: mismo mes/día/hora en el año pedido
+        sr_subject = AstrologicalSubject(
+            name=f"RS_{request.nombre}_{request.año_revolucion}",
+            year=request.año_revolucion, month=m_n, day=d_n, hour=h_n, minute=mi_n,
+            city=request.ciudad_natal, nation=request.pais_natal,
+            lat=lat_n, lng=lon_n, tz_str=request.timezone_natal,
             houses_system_identifier=request.house_system
         )
 
         return {
             "success": True,
-            "momento_retorno": f"{y:04d}-{m:02d}-{d:02d} {h:02d}:{mi:02d}",
-            "natal": formatear_posiciones(natal),
-            "revolucion_solar": formatear_posiciones(sr)
+            "natal": formatear_posiciones(natal_subject),
+            "revolucion_solar": formatear_posiciones(sr_subject)
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
 
 
 @app.get("/test_nodos")
 def test_nodos():
-    """Endpoint de prueba para verificar que los nodos funcionan"""
+    """Prueba rápida para verificar nodos y casas"""
     try:
         subject = AstrologicalSubject(
             name="Test",
@@ -682,19 +572,12 @@ def test_nodos():
             lng=-0.88,
             tz_str="Europe/Madrid"
         )
-
-        mean_node_calc = get_mean_node(subject)
-
         posiciones = formatear_posiciones(subject)
-
         return {
-            "mean_node_calculated": mean_node_calc,
-            "posiciones_nodos": {
-                "nodo_norte": posiciones["planetas"].get("nodo_norte"),
-                "nodo_sur": posiciones["planetas"].get("nodo_sur")
-            },
+            "mean_node_calculated": get_mean_node(subject),
+            "nodo_norte": posiciones["planetas"].get("nodo_norte"),
+            "nodo_sur": posiciones["planetas"].get("nodo_sur"),
             "puntos": posiciones.get("puntos")
         }
-
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
