@@ -1,5 +1,4 @@
-```python
-"""
+
 API Astrológica para SAVP v3.5
 Versión CORREGIDA - Compatible con Kerykeion 5.7.0
 
@@ -761,4 +760,3 @@ def test_nodos():
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-```
