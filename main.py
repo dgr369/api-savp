@@ -345,6 +345,56 @@ def formatear_posiciones(subject: AstrologicalSubject, reference_subject: Option
     return {"planetas": planetas, "puntos": puntos}
 
 # ENDPOINTS
+@app.get("/test_nodos")
+def test_nodos():
+    """Endpoint de prueba para verificar que los nodos funcionan"""
+    try:
+        subject = AstrologicalSubject(
+            name="Test",
+            year=1977,
+            month=6,
+            day=4,
+            hour=9,
+            minute=15,
+            city="Zaragoza",
+            nation="España",
+            lat=41.65,
+            lng=-0.88,
+            tz_str="Europe/Madrid"
+        )
+        
+        # Intentar obtener nodos de varias formas
+        result = {
+            "mean_node_exists": hasattr(subject, 'mean_node'),
+            "true_node_exists": hasattr(subject, 'true_node'),
+        }
+        
+        if hasattr(subject, 'mean_node'):
+            nodo = getattr(subject, 'mean_node')
+            result["mean_node_type"] = str(type(nodo))
+            result["mean_node_value"] = str(nodo)
+            result["mean_node_data"] = get_planet_data(subject, 'mean_node')
+        
+        if hasattr(subject, 'true_node'):
+            nodo = getattr(subject, 'true_node')
+            result["true_node_type"] = str(type(nodo))
+            result["true_node_value"] = str(nodo)
+            result["true_node_data"] = get_planet_data(subject, 'true_node')
+        
+        # También probar formatear_posiciones
+        posiciones = formatear_posiciones(subject)
+        result["planetas_keys"] = list(posiciones.get("planetas", {}).keys())
+        result["nodo_norte_in_planetas"] = "nodo_norte" in posiciones.get("planetas", {})
+        result["nodo_sur_in_planetas"] = "nodo_sur" in posiciones.get("planetas", {})
+        
+        if "nodo_norte" in posiciones.get("planetas", {}):
+            result["nodo_norte_value"] = posiciones["planetas"]["nodo_norte"]
+        
+        return result
+        
+    except Exception as e:
+        return {"error": str(e)}
+
 @app.get("/")
 def root():
     return {
