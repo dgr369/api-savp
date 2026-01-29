@@ -292,26 +292,42 @@ def grado_absoluto_desde_signo(grado, signo):
 
 def get_mean_node(subject):
     """
-    Calcula el Nodo Norte Medio usando Swiss Ephemeris directamente
-    Kerykeion 5.x no provee mean_node, así que lo calculamos manualmente
+    Calcula el Nodo Norte Medio usando fórmula astronómica
+    (sin pyswisseph, que no compila en Render)
+    
+    Fórmula de Jean Meeus (Astronomical Algorithms):
+    Nodo Medio = 125.04452° - 1934.136261° × T + 0.0020708° × T² + T³ / 450000
+    donde T = (JD - 2451545.0) / 36525 (siglos julianos desde J2000)
     """
     try:
-        import pyswisseph as swe
+        from datetime import datetime, timezone
         
-        # Configurar fecha juliana (UTC)
-        year = subject.year
-        month = subject.month
-        day = subject.day
-        hour = subject.hour + (subject.minute / 60.0)
+        # Fecha juliana J2000 (1 enero 2000 12:00 UTC)
+        J2000 = 2451545.0
         
-        # Convertir a fecha juliana
-        jd = swe.julday(year, month, day, hour)
+        # Convertir fecha a UTC
+        dt = datetime(subject.year, subject.month, subject.day, 
+                     subject.hour, subject.minute, tzinfo=timezone.utc)
         
-        # Calcular Nodo Norte Medio
-        # SE_MEAN_NODE = 10
-        result = swe.calc_ut(jd, swe.MEAN_NODE)
+        # Calcular fecha juliana
+        a = (14 - dt.month) // 12
+        y = dt.year + 4800 - a
+        m = dt.month + 12 * a - 3
         
-        longitude = result[0]  # Longitud eclíptica 0-360
+        jd = dt.day + (153 * m + 2) // 5 + 365 * y + y // 4 - y // 100 + y // 400 - 32045
+        jd += (dt.hour - 12) / 24.0 + dt.minute / 1440.0
+        
+        # Siglos julianos desde J2000
+        T = (jd - J2000) / 36525.0
+        
+        # Fórmula del Nodo Medio (Meeus)
+        # Longitud del nodo ascendente medio
+        omega = 125.04452 - 1934.136261 * T + 0.0020708 * T**2 + T**3 / 450000.0
+        
+        # Normalizar a 0-360
+        longitude = omega % 360.0
+        if longitude < 0:
+            longitude += 360.0
         
         # Convertir a signo + grado
         signos = ['Ari', 'Tau', 'Gem', 'Can', 'Leo', 'Vir', 
@@ -319,6 +335,7 @@ def get_mean_node(subject):
         sign_num = int(longitude / 30)
         degree = longitude % 30
         
+        print(f"DEBUG mean_node (Meeus): JD={jd:.2f}, T={T:.6f}, omega={omega:.2f}°")
         print(f"DEBUG mean_node: longitude={longitude:.2f}°, {signos[sign_num]} {degree:.2f}°")
         
         return {
