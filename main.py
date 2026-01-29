@@ -255,6 +255,16 @@ def formatear_posiciones(subject: AstrologicalSubject, reference_subject: Option
     """
     planetas = {}
     
+    # DEBUG
+    if reference_subject:
+        print(f"DEBUG formatear_posiciones: reference_subject presente")
+        print(f"DEBUG reference_subject.name = {reference_subject.name}")
+        # Verificar que tiene atributos de casas
+        print(f"DEBUG hasattr house1? {hasattr(reference_subject, 'house1')}")
+        if hasattr(reference_subject, 'house1'):
+            h1 = getattr(reference_subject, 'house1')
+            print(f"DEBUG house1 = {h1}")
+    
     # Mapeo de nombres
     planet_map = {
         "sol": "sun",
@@ -275,6 +285,7 @@ def formatear_posiciones(subject: AstrologicalSubject, reference_subject: Option
             # Si usamos casas de referencia (casas natales), recalcular
             if reference_subject:
                 grado_abs = grado_absoluto_desde_signo(data['grado'], data['signo'])
+                print(f"DEBUG {esp}: {data['grado']}° {data['signo']} = {grado_abs}° absoluto")
                 casa_natal = calcular_casa_en_carta_natal(grado_abs, reference_subject)
                 data['casa'] = casa_natal
             
