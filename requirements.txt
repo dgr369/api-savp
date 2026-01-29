@@ -1,6 +1,6 @@
-fastapi==0.109.0
-uvicorn[standard]==0.27.0
+fastapi>=0.110.0
+uvicorn[standard]>=0.27.0
 kerykeion>=5.7.0
-pytz==2024.1
-pydantic==2.5.3
-geopy==2.4.1
+pytz>=2024.1
+pydantic>=2.6.0      ← Versión más reciente con wheels precompilados
+geopy>=2.4.1
