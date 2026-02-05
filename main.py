@@ -1,86 +1,40 @@
-"""
-main.py
-API Astrológica SAVP v3.6 Final
-
-Integración completa de todos los módulos v3.6
-
-Fecha: Febrero 2025
-"""
+# ============================================================================
+# MAIN FASTAPI — SAVP v3.6 DEFINITIVO
+# TODO EN ROOT — SIN AMBIGÜEDADES
+# ============================================================================
 
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
+
+# ------------------ IMPORTS ROUTERS ------------------
+
 from savp_v36_router_completo import router as savp_router
 from motor_lectura_v36 import router as lectura_router
 
-app = FastAPI()
-
-app.include_router(savp_router)
-app.include_router(lectura_router)
-
-
-# ============================================================================
-# IMPORTAR ROUTER SAVP v3.6 FINAL
-# ============================================================================
-
-try:
-    from savp_v36_router_completo import router as savp_v36_router
-    SAVP_V36_ENABLED = True
-    print("✅ SAVP v3.6 Final router cargado")
-except ImportError as e:
-    SAVP_V36_ENABLED = False
-    print(f"⚠️  SAVP v3.6 no disponible: {e}")
-
-# ============================================================================
-# APP
-# ============================================================================
+# ------------------ APP ------------------
 
 app = FastAPI(
-    title=f"API SAVP {'v3.6 Final' if SAVP_V36_ENABLED else 'v3.5'}",
-    description="Sistema Árbol de la Vida Personal - API Completa",
-    version="3.6.0" if SAVP_V36_ENABLED else "3.5.0",
+    title="SAVP v3.6",
+    description="Systema Arbor Vitae Personalis",
+    version="3.6"
 )
 
-# CORS
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# ------------------ ROUTERS ------------------
 
-# ============================================================================
-# INCLUIR ROUTERS
-# ============================================================================
+# Carta natal + cálculo
+app.include_router(savp_router)
 
-if SAVP_V36_ENABLED:
-    app.include_router(savp_v36_router)
+# Lecturas por fases (FASE 1–10)
+app.include_router(lectura_router)
 
-# ============================================================================
-# ENDPOINTS PRINCIPALES
-# ============================================================================
+# ------------------ ROOT CHECK ------------------
 
 @app.get("/")
 def root():
-    """Información de la API."""
     return {
-        "api": "SAVP API",
-        "version": "3.6 Final" if SAVP_V36_ENABLED else "3.5",
-        "status": "operational",
-        "endpoints": {
-            "savp_info": "/savp/v36/",
-            "natal": "/savp/v36/natal",
-            "lectura": "/savp/v36/lectura",
-            "transito": "/savp/v36/transito",
-            "test": "/savp/v36/test"
-        } if SAVP_V36_ENABLED else {}
+        "status": "ok",
+        "system": "SAVP v3.6",
+        "routers": [
+            "/savp/v36/natal",
+            "/savp/v36/lectura"
+        ]
     }
-
-@app.get("/health")
-def health():
-    """Health check."""
-    return {"status": "healthy", "version": "3.6"}
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
