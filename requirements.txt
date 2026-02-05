@@ -6,8 +6,8 @@ fastapi==0.109.0
 uvicorn[standard]==0.27.0
 pydantic==2.5.3
 
-# Astrología
-kerykeion==4.15.3
+# Astrología (versiones corregidas)
+kerykeion==5.7.1
 pyswisseph==2.10.3.2
 
 # Visualizaciones
