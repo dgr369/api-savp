@@ -1,11 +1,10 @@
 # ============================================================================
-# SAVP v3.6 FINAL — ROUTER COMPLETO (FIX KERYKEION CASAS)
+# SAVP v3.6 FINAL — ROUTER COMPLETO (ROOT + DOBLE MODO GEO)
 # ============================================================================
 
-from fastapi import APIRouter, HTTPException, Response
-from fastapi.responses import FileResponse
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
-from typing import Optional, Dict
+from typing import Optional
 import sys
 import traceback
 
@@ -21,7 +20,7 @@ except ImportError:
     print("⚠️  Kerykeion no disponible", file=sys.stderr)
 
 # ============================================================================
-# IMPORTAR MÓDULOS SAVP v3.6
+# IMPORTS SAVP (ROOT)
 # ============================================================================
 
 try:
@@ -29,47 +28,22 @@ try:
     CORE_DISPONIBLE = True
 except ImportError:
     CORE_DISPONIBLE = False
-    print("❌ savp_v36_core_completo.py no disponible", file=sys.stderr)
-
-try:
-    from motor_lectura_v36 import generar_fase_completa
-    MOTOR_LECTURA_DISPONIBLE = True
-except ImportError:
-    MOTOR_LECTURA_DISPONIBLE = False
-    print("⚠️  motor_lectura_v36.py no disponible", file=sys.stderr)
+    print("❌ savp_v36_core_completo no disponible", file=sys.stderr)
 
 try:
     from tikun_automatico import generar_tikun_completo
     TIKUN_DISPONIBLE = True
 except ImportError:
     TIKUN_DISPONIBLE = False
-    print("⚠️  tikun_automatico.py no disponible", file=sys.stderr)
 
 try:
     from visualizaciones import exportar_visualizaciones_completas
     VISUALIZACIONES_DISPONIBLE = True
 except ImportError:
     VISUALIZACIONES_DISPONIBLE = False
-    print("⚠️  visualizaciones.py no disponible", file=sys.stderr)
-
-try:
-    from transitos_v36 import detectar_transito, interpretar_transito
-    TRANSITOS_DISPONIBLE = True
-except ImportError:
-    TRANSITOS_DISPONIBLE = False
-    print("⚠️  transitos_v36.py no disponible", file=sys.stderr)
-
-try:
-    from generar_arbol_v36 import generar_arbol_desde_analisis
-    import matplotlib
-    matplotlib.use("Agg")
-    DIAGRAMA_DISPONIBLE = True
-except ImportError:
-    DIAGRAMA_DISPONIBLE = False
-    print("⚠️  generar_arbol_v36.py no disponible", file=sys.stderr)
 
 # ============================================================================
-# FIX KERYKEION ≥5.7 — CASAS SIMBÓLICAS
+# FIX CASAS KERYKEION ≥5.7
 # ============================================================================
 
 HOUSE_MAP = {
@@ -87,11 +61,11 @@ HOUSE_MAP = {
     "Twelfth_House": 12,
 }
 
-def normalizar_casa(raw_house) -> int:
-    if isinstance(raw_house, str):
-        return HOUSE_MAP.get(raw_house, 1)
+def normalizar_casa(raw):
+    if isinstance(raw, str):
+        return HOUSE_MAP.get(raw, 1)
     try:
-        return int(raw_house)
+        return int(raw)
     except Exception:
         return 1
 
@@ -101,28 +75,12 @@ def normalizar_casa(raw_house) -> int:
 
 class NatalRequest(BaseModel):
     nombre: str
-    fecha: str
-    hora: str
+    fecha: str = Field(..., description="DD/MM/YYYY")
+    hora: str = Field(..., description="HH:MM")
     lugar: str
     lat: Optional[float] = None
     lon: Optional[float] = None
     timezone: str = "Europe/Madrid"
-
-class LecturaRequest(BaseModel):
-    analisis_savp: dict
-    datos_natales: Optional[dict] = None
-    fase: Optional[int] = None
-    nombre: str = "Consultante"
-
-class TransitoRequest(BaseModel):
-    planeta_transitante: str
-    grado_transito: float
-    signo_transito: str
-    planeta_natal: str
-    grado_natal: float
-    signo_natal: str
-    retrogrado: bool = False
-    analisis_natal: dict
 
 # ============================================================================
 # ROUTER
@@ -131,45 +89,44 @@ class TransitoRequest(BaseModel):
 router = APIRouter(prefix="/savp/v36", tags=["SAVP v3.6 Final"])
 
 # ============================================================================
-# INFO
-# ============================================================================
-
-@router.get("/")
-def info():
-    return {
-        "version": "SAVP v3.6 Final",
-        "kerykeion": KERYKEION_DISPONIBLE,
-        "core": CORE_DISPONIBLE,
-        "motor_lectura": MOTOR_LECTURA_DISPONIBLE,
-        "tikun": TIKUN_DISPONIBLE,
-        "visualizaciones": VISUALIZACIONES_DISPONIBLE,
-        "transitos": TRANSITOS_DISPONIBLE,
-        "diagrama": DIAGRAMA_DISPONIBLE,
-    }
-
-# ============================================================================
-# NATAL
+# ENDPOINT NATAL
 # ============================================================================
 
 @router.post("/natal")
-def natal(request: NatalRequest):
+def calcular_natal(request: NatalRequest):
 
     if not KERYKEION_DISPONIBLE or not CORE_DISPONIBLE:
         raise HTTPException(status_code=503, detail="Módulos no disponibles")
 
     try:
-        subject = AstrologicalSubject(
+        # ------------------------------------------------------------------
+        # CREACIÓN DEL SUBJECT (DOBLE MODO)
+        # ------------------------------------------------------------------
+
+        subject_kwargs = dict(
             name=request.nombre,
             year=int(request.fecha.split("/")[2]),
             month=int(request.fecha.split("/")[1]),
             day=int(request.fecha.split("/")[0]),
             hour=int(request.hora.split(":")[0]),
             minute=int(request.hora.split(":")[1]),
-            city=request.lugar,
-            lat=request.lat,
-            lng=request.lon,
             tz_str=request.timezone,
         )
+
+        if request.lat is not None and request.lon is not None:
+            # MODO A — coordenadas explícitas (preferente)
+            subject_kwargs["lat"] = request.lat
+            subject_kwargs["lng"] = request.lon
+            subject_kwargs["city"] = request.lugar
+        else:
+            # MODO B — geocodificación automática (fallback)
+            subject_kwargs["city"] = request.lugar
+
+        subject = AstrologicalSubject(**subject_kwargs)
+
+        # ------------------------------------------------------------------
+        # EXTRACCIÓN DE PLANETAS
+        # ------------------------------------------------------------------
 
         planetas = {}
         planet_map = {
@@ -195,6 +152,7 @@ def natal(request: NatalRequest):
                     "retrogrado": bool(getattr(p, "retrograde", False)),
                 }
 
+        # NODOS
         if hasattr(subject, "lunar_node"):
             ln = subject.lunar_node
             casa_nn = normalizar_casa(getattr(ln, "house", 1))
@@ -212,6 +170,10 @@ def natal(request: NatalRequest):
                 "casa": ((casa_nn + 6 - 1) % 12) + 1,
                 "retrogrado": True,
             }
+
+        # ------------------------------------------------------------------
+        # ANÁLISIS SAVP
+        # ------------------------------------------------------------------
 
         analisis = procesar_carta_savp_v36_completa(subject, planetas)
 
@@ -232,4 +194,7 @@ def natal(request: NatalRequest):
 
     except Exception as e:
         traceback.print_exc(file=sys.stderr)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error en cálculo natal: {str(e)}"
+        )
