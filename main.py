@@ -9,6 +9,14 @@ Fecha: Febrero 2025
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from savp_v36_router_completo import router as savp_router
+from motor_lectura_v36 import router as lectura_router
+
+app = FastAPI()
+
+app.include_router(savp_router)
+app.include_router(lectura_router)
+
 
 # ============================================================================
 # IMPORTAR ROUTER SAVP v3.6 FINAL
