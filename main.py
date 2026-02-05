@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 API AstrolÃ³gica para SAVP v3.6
 VersiÃ³n ACTUALIZADA - Compatible con Kerykeion 5.7.0
@@ -211,7 +212,7 @@ class SolarReturnRequest(BaseModel):
     lat_natal: Optional[float] = None
     lon_natal: Optional[float] = None
     timezone_natal: Optional[str] = "Europe/Madrid"
-    aÃ±o_revolucion: int
+    anio_revolucion: int
     house_system: Optional[str] = "P"
 
 
@@ -806,7 +807,7 @@ def calcular_revolucion_solar(request: SolarReturnRequest):
         if swe is not None:
             # Hallar instante exacto del retorno solar (UTC)
             natal_dt_local_naive = datetime(y_n, m_n, d_n, h_n, mi_n, s_n)
-            dt_return_utc = find_solar_return_dt_utc(natal_dt_local_naive, request.timezone_natal, request.aÃ±o_revolucion)
+            dt_return_utc = find_solar_return_dt_utc(natal_dt_local_naive, request.timezone_natal, request.anio_revolucion)
 
             tz = pytz.timezone(request.timezone_natal or "Europe/Madrid")
             dt_return_local = dt_return_utc.astimezone(tz)
@@ -816,7 +817,7 @@ def calcular_revolucion_solar(request: SolarReturnRequest):
 
             # Construir subject RS con minuto (Kerykeion no admite segundos)
             sr_subject = AstrologicalSubject(
-                name=f"RS_{request.nombre}_{request.aÃ±o_revolucion}",
+                name=f"RS_{request.nombre}_{request.anio_revolucion}",
                 year=dt_return_local.year,
                 month=dt_return_local.month,
                 day=dt_return_local.day,
@@ -833,8 +834,8 @@ def calcular_revolucion_solar(request: SolarReturnRequest):
         else:
             # Fallback: aproximaciÃ³n (como antes)
             sr_subject = AstrologicalSubject(
-                name=f"RS_{request.nombre}_{request.aÃ±o_revolucion}",
-                year=request.aÃ±o_revolucion,
+                name=f"RS_{request.nombre}_{request.anio_revolucion}",
+                year=request.anio_revolucion,
                 month=m_n,
                 day=d_n,
                 hour=h_n,
