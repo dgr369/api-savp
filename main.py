@@ -15,7 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 # ============================================================================
 
 try:
-    from savp_v36_router_final import router as savp_v36_router
+    from savp_v36_router import router as savp_v36_router
     SAVP_V36_ENABLED = True
     print("✅ SAVP v3.6 Final router cargado")
 except ImportError as e:
