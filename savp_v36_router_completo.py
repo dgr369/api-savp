@@ -1,5 +1,5 @@
 # ============================================================================
-# SAVP v3.6 FINAL — ROUTER COMPLETO (ROOT + DOBLE MODO GEO)
+# SAVP v3.6 FINAL — ROUTER COMPLETO (ROOT + NODO MEDIO)
 # ============================================================================
 
 from fastapi import APIRouter, HTTPException
@@ -100,7 +100,7 @@ def calcular_natal(request: NatalRequest):
 
     try:
         # ------------------------------------------------------------------
-        # CREACIÓN DEL SUBJECT (DOBLE MODO)
+        # CREACIÓN DEL SUBJECT
         # ------------------------------------------------------------------
 
         subject_kwargs = dict(
@@ -114,18 +114,16 @@ def calcular_natal(request: NatalRequest):
         )
 
         if request.lat is not None and request.lon is not None:
-            # MODO A — coordenadas explícitas (preferente)
             subject_kwargs["lat"] = request.lat
             subject_kwargs["lng"] = request.lon
             subject_kwargs["city"] = request.lugar
         else:
-            # MODO B — geocodificación automática (fallback)
             subject_kwargs["city"] = request.lugar
 
         subject = AstrologicalSubject(**subject_kwargs)
 
         # ------------------------------------------------------------------
-        # EXTRACCIÓN DE PLANETAS
+        # PLANETAS
         # ------------------------------------------------------------------
 
         planetas = {}
@@ -152,24 +150,31 @@ def calcular_natal(request: NatalRequest):
                     "retrogrado": bool(getattr(p, "retrograde", False)),
                 }
 
-        # NODOS
-        if hasattr(subject, "lunar_node"):
-            ln = subject.lunar_node
-            casa_nn = normalizar_casa(getattr(ln, "house", 1))
+        # ------------------------------------------------------------------
+        # NODO NORTE MEDIO (FORZADO)
+        # ------------------------------------------------------------------
 
-            planetas["nodo_norte"] = {
-                "grado": round(float(getattr(ln, "position", 0)), 2),
-                "signo": getattr(ln, "sign", "Ari"),
-                "casa": casa_nn,
-                "retrogrado": bool(getattr(ln, "retrograde", False)),
-            }
+        if not hasattr(subject, "mean_lunar_node"):
+            raise ValueError("Nodo Norte Medio no disponible en Kerykeion")
 
-            planetas["nodo_sur"] = {
-                "grado": (planetas["nodo_norte"]["grado"] + 180) % 30,
-                "signo": planetas["nodo_norte"]["signo"],
-                "casa": ((casa_nn + 6 - 1) % 12) + 1,
-                "retrogrado": True,
-            }
+        ln = subject.mean_lunar_node
+        casa_nn = normalizar_casa(getattr(ln, "house", 1))
+
+        planetas["nodo_norte"] = {
+            "grado": round(float(getattr(ln, "position", 0)), 4),
+            "signo": getattr(ln, "sign", "Ari"),
+            "casa": casa_nn,
+            "retrogrado": False,
+            "tipo": "mean"
+        }
+
+        planetas["nodo_sur"] = {
+            "grado": (planetas["nodo_norte"]["grado"] + 180) % 30,
+            "signo": planetas["nodo_norte"]["signo"],
+            "casa": ((casa_nn + 6 - 1) % 12) + 1,
+            "retrogrado": True,
+            "tipo": "mean"
+        }
 
         # ------------------------------------------------------------------
         # ANÁLISIS SAVP
