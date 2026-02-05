@@ -1,28 +1,25 @@
 # ============================================================================
-# SAVP v3.6 FINAL — ROUTER COMPLETO (ROOT)
-# Nodo Norte y Sur MEDIOS calculados internamente (Meeus)
+# SAVP v3.6 — ROUTER NATAL CON PERSISTENCIA MÍNIMA
+# TODO EN ROOT
 # ============================================================================
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from typing import Optional
 import sys
 import traceback
-from datetime import datetime, timezone
-
-# ============================================================================
-# KERYKEION (solo planetas)
-# ============================================================================
 
 from kerykeion import AstrologicalSubject
-
-# ============================================================================
-# IMPORTS SAVP (ROOT)
-# ============================================================================
 
 from savp_v36_core_completo import procesar_carta_savp_v36_completa
 from tikun_automatico import generar_tikun_completo
 from visualizaciones import exportar_visualizaciones_completas
+
+# ============================================================================
+# PERSISTENCIA MÍNIMA (MEMORIA DE PROCESO)
+# ============================================================================
+
+LAST_ANALISIS_SAVP = None
 
 # ============================================================================
 # FIX CASAS KERYKEION
@@ -44,63 +41,13 @@ def normalizar_casa(raw):
         return 1
 
 # ============================================================================
-# CÁLCULO NODO NORTE MEDIO (Meeus)
-# ============================================================================
-
-SIGNOS = ["Aries", "Tauro", "Géminis", "Cáncer", "Leo", "Virgo",
-          "Libra", "Escorpio", "Sagitario", "Capricornio", "Acuario", "Piscis"]
-
-def calcular_nodos_medios(dt_utc: datetime):
-    # Julian Day
-    a = (14 - dt_utc.month) // 12
-    y = dt_utc.year + 4800 - a
-    m = dt_utc.month + 12 * a - 3
-
-    jd = (
-        dt_utc.day
-        + ((153 * m + 2) // 5)
-        + 365 * y
-        + y // 4
-        - y // 100
-        + y // 400
-        - 32045
-    )
-
-    jd += (dt_utc.hour + dt_utc.minute / 60) / 24
-    T = (jd - 2451545.0) / 36525.0
-
-    # Longitud Nodo Norte Medio
-    omega = (
-        125.04452
-        - 1934.136261 * T
-        + 0.0020708 * T**2
-        + (T**3) / 450000
-    ) % 360
-
-    # Nodo Sur = oposición exacta
-    omega_sur = (omega + 180) % 360
-
-    def descomponer(longitud):
-        signo_index = int(longitud // 30)
-        grado = longitud % 30
-        return SIGNOS[signo_index], round(grado, 4)
-
-    signo_n, grado_n = descomponer(omega)
-    signo_s, grado_s = descomponer(omega_sur)
-
-    return {
-        "norte": {"signo": signo_n, "grado": grado_n},
-        "sur": {"signo": signo_s, "grado": grado_s},
-    }
-
-# ============================================================================
 # MODELO REQUEST
 # ============================================================================
 
 class NatalRequest(BaseModel):
     nombre: str
-    fecha: str = Field(..., description="DD/MM/YYYY")
-    hora: str = Field(..., description="HH:MM")
+    fecha: str
+    hora: str
     lugar: str
     lat: Optional[float] = None
     lon: Optional[float] = None
@@ -110,7 +57,7 @@ class NatalRequest(BaseModel):
 # ROUTER
 # ============================================================================
 
-router = APIRouter(prefix="/savp/v36", tags=["SAVP v3.6 Final"])
+router = APIRouter(prefix="/savp/v36", tags=["SAVP v3.6 Natal"])
 
 # ============================================================================
 # ENDPOINT NATAL
@@ -118,6 +65,9 @@ router = APIRouter(prefix="/savp/v36", tags=["SAVP v3.6 Final"])
 
 @router.post("/natal")
 def calcular_natal(request: NatalRequest):
+
+    global LAST_ANALISIS_SAVP
+
     try:
         subject = AstrologicalSubject(
             name=request.nombre,
@@ -131,8 +81,6 @@ def calcular_natal(request: NatalRequest):
             lng=request.lon,
             tz_str=request.timezone,
         )
-
-        # ------------------ PLANETAS ------------------
 
         planetas = {}
         planet_map = {
@@ -151,38 +99,11 @@ def calcular_natal(request: NatalRequest):
                 "retrogrado": bool(p.retrograde),
             }
 
-        # ------------------ NODOS MEDIOS ------------------
-
-        dt_utc = datetime(
-            year=int(request.fecha.split("/")[2]),
-            month=int(request.fecha.split("/")[1]),
-            day=int(request.fecha.split("/")[0]),
-            hour=int(request.hora.split(":")[0]),
-            minute=int(request.hora.split(":")[1]),
-            tzinfo=timezone.utc,
-        )
-
-        nodos = calcular_nodos_medios(dt_utc)
-
-        planetas["nodo_norte"] = {
-            "signo": nodos["norte"]["signo"],
-            "grado": nodos["norte"]["grado"],
-            "casa": 1,
-            "retrogrado": False,
-            "tipo": "mean",
-        }
-
-        planetas["nodo_sur"] = {
-            "signo": nodos["sur"]["signo"],
-            "grado": nodos["sur"]["grado"],
-            "casa": 7,
-            "retrogrado": True,
-            "tipo": "mean",
-        }
-
-        # ------------------ SAVP ------------------
-
         analisis = procesar_carta_savp_v36_completa(subject, planetas)
+
+        # 🔒 Guardar análisis para futuras lecturas
+        LAST_ANALISIS_SAVP = analisis
+
         tikun = generar_tikun_completo(analisis)
         visualizaciones = exportar_visualizaciones_completas(analisis)
 
