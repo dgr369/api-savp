@@ -1,6 +1,24 @@
-fastapi==0.110.0
-uvicorn[standard]==0.27.1
-kerykeion==5.7.0
-pydantic>=2.7,<3
-pytz>=2024.2
-geopy==2.4.1
+# SAVP v3.6 Final - Requirements
+# Febrero 2025
+
+# Core
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+pydantic==2.5.3
+
+# Astrología
+kerykeion==4.15.3
+pyswisseph==2.10.3.2
+
+# Visualizaciones
+matplotlib==3.8.2
+numpy==1.26.3
+
+# Documentos
+python-docx==1.1.0
+reportlab==4.0.9
+Pillow==10.2.0
+
+# Utilidades
+python-dateutil==2.8.2
+pytz==2024.1
