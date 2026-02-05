@@ -1,36 +1,33 @@
 # ============================================================================
-# MOTOR DE LECTURA SAVP v3.6
-# Endpoint STATELESS conforme al contrato oficial SAVP
-# TODO EN ROOT
+# MOTOR DE LECTURA SAVP v3.6 — ROBUSTO Y COMPATIBLE
 # ============================================================================
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional, Dict
 import traceback
 import sys
 
-# ============================================================================
-# ROUTER FASTAPI
-# ============================================================================
-
-router = APIRouter(
-    prefix="/savp/v36",
-    tags=["SAVP v3.6 Lectura"]
-)
+router = APIRouter(prefix="/savp/v36", tags=["SAVP v3.6 Lectura"])
 
 # ============================================================================
-# MODELO DE REQUEST (CONTRATO SAVP v3.6)
+# MODELO DE REQUEST (CON ALIAS DEFENSIVOS)
 # ============================================================================
 
 class LecturaRequest(BaseModel):
-    analisis_savp: Dict
+    analisis_savp: Dict = Field(
+        ...,
+        alias="analisis",
+        description="Análisis SAVP completo"
+    )
     fase: Optional[int] = None
     nombre: str = "Consultante"
 
+    class Config:
+        allow_population_by_field_name = True
+
 # ============================================================================
-# FUNCIÓN CENTRAL DE LECTURA
-# NO usa estado, NO usa cache, NO asume nada previo
+# MOTOR
 # ============================================================================
 
 def generar_fase_completa(
@@ -38,31 +35,25 @@ def generar_fase_completa(
     fase: Optional[int] = None,
     nombre: str = "Consultante"
 ) -> str:
-    """
-    Genera el texto completo de una fase SAVP v3.6.
-    """
 
     fases = analisis_savp.get("fases")
 
     if not fases:
         raise ValueError("analisis_savp no contiene el bloque 'fases'")
 
-    # Todas las fases
     if fase is None:
         return "\n\n".join(
             fases[str(f)] for f in sorted(map(int, fases.keys()))
         )
 
     fase_str = str(fase)
-
     if fase_str not in fases:
-        raise ValueError(f"Fase {fase} no disponible en analisis_savp")
+        raise ValueError(f"Fase {fase} no disponible")
 
     return fases[fase_str]
 
 # ============================================================================
-# ENDPOINT OFICIAL /savp/v36/lectura
-# CUMPLE EL CONTRATO DEFINIDO EN TUS INSTRUCCIONES
+# ENDPOINT
 # ============================================================================
 
 @router.post("/lectura")
@@ -73,7 +64,6 @@ def lectura_endpoint(request: LecturaRequest):
             fase=request.fase,
             nombre=request.nombre
         )
-
         return {
             "nombre": request.nombre,
             "fase": request.fase,
@@ -82,7 +72,4 @@ def lectura_endpoint(request: LecturaRequest):
 
     except Exception as e:
         traceback.print_exc(file=sys.stderr)
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error en lectura SAVP: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=str(e))
