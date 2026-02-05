@@ -29,6 +29,10 @@ from datetime import datetime
 import json
 import base64
 import io
+import sys
+import traceback
+
+
 
 # Kerykeion
 try:
@@ -45,6 +49,17 @@ try:
 except ImportError:
     CORE_DISPONIBLE = False
     print("❌ savp_v36_core_completo.py no disponible")
+
+print("="*80, file=sys.stderr)
+print("INICIANDO CARGA DE ROUTER v3.6", file=sys.stderr)
+print("="*80, file=sys.stderr)
+
+try:
+    from savp_v36_core import procesar_carta_savp_v36_completa
+    print("✅ savp_v36_core importado", file=sys.stderr)
+except Exception as e:
+    print(f"❌ Error importando savp_v36_core:", file=sys.stderr)
+    traceback.print_exc(file=sys.stderr)
 
 # Motor de lectura
 try:
