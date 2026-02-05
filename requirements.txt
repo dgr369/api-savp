@@ -1,25 +1,25 @@
 # SAVP v3.6 Final - Requirements
-# Versiones PROBADAS y ESTABLES
-# Forzar Python 3.11 (3.13 da problemas de compilación)
+# Compatible Python 3.11+ (sin forzar versión específica)
+# Usa >= para permitir actualizaciones automáticas
 
-# Core Web
-fastapi==0.115.5
-uvicorn[standard]==0.32.1
-pydantic==2.10.3
+# Core Web (versiones flexibles)
+fastapi>=0.115.0,<0.116.0
+uvicorn[standard]>=0.32.0,<0.33.0
+pydantic>=2.10.0,<3.0.0
 
 # Astrología
-kerykeion==5.7.1
-pyswisseph==2.10.3.2
+kerykeion>=5.7.0,<6.0.0
+pyswisseph>=2.10.3,<3.0.0
 
-# Visualización (versiones con wheels)
-matplotlib==3.9.3
-numpy==2.1.3
+# Visualización (versiones flexibles con wheels)
+matplotlib>=3.9.0,<4.0.0
+numpy>=2.1.0,<3.0.0
 
 # Documentos
-python-docx==1.1.2
-reportlab==4.2.5
-Pillow==11.0.0
+python-docx>=1.1.0,<2.0.0
+reportlab>=4.2.0,<5.0.0
+Pillow>=11.0.0,<12.0.0
 
 # Utilidades
-python-dateutil==2.9.0.post0
-pytz==2024.2
+python-dateutil>=2.9.0
+pytz>=2024.1
